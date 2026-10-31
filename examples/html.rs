@@ -25,7 +25,7 @@ const MARKDOWN: &str = r#"Markdown from real sites mixes in <em>HTML</em>, like
 <script>console.log("Scripts and styles are left out.")</script>
 "#;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     // Classes are written like CSS selectors. A code block inside takes the
     // background.
     let theme = Theme {
@@ -37,5 +37,5 @@ fn main() {
         )],
         ..Theme::default()
     };
-    common::print(&mut MarkdownState::new(MARKDOWN), &theme);
+    common::print(&mut MarkdownState::new(MARKDOWN), &theme)
 }

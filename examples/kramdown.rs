@@ -30,7 +30,7 @@ Markdown *inside* HTML, thanks to `markdown="1"`.
 A second heading of the same name gets its own id, `fixed-1`.
 "#;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     // What a CommonMark parser is handed. The table of contents is written
     // out as links to the headings' ids, and the Markdown in the div gets
     // the blank lines it needs.
@@ -42,5 +42,5 @@ fn main() {
         classes: vec![(".new".into(), Style::new().fg(Color::Green))],
         ..Theme::default()
     };
-    common::print(&mut MarkdownState::new(MARKDOWN), &theme);
+    common::print(&mut MarkdownState::new(MARKDOWN), &theme)
 }

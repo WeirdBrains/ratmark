@@ -80,7 +80,8 @@ colors, which is handy for eyeballing layout.
 ## Examples
 
 Each feature has an example that prints a short document, drawn by
-`MarkdownView`, to the terminal in color:
+`MarkdownView` with Ratatui's crossterm backend, to the terminal in color.
+They need an interactive terminal, not a pipe:
 
 ```sh
 cargo run --example syntax --features syntax

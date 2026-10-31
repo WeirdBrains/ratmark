@@ -26,12 +26,12 @@ just text
 ```
 "#;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     // Any of syntect's bundled themes. Only their foreground colors are
     // used, over the theme's code block background.
     let theme = Theme {
         syntax: Some("base16-ocean.dark"),
         ..Theme::default()
     };
-    common::print(&mut MarkdownState::new(MARKDOWN), &theme);
+    common::print(&mut MarkdownState::new(MARKDOWN), &theme)
 }

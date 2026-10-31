@@ -27,7 +27,7 @@ tags: [rust, tui]
 The front matter above isn't drawn.
 ";
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let (front, body) = FrontMatter::split(MARKDOWN);
     let front = front.expect("the document has front matter");
     println!("format: {:?}", front.format);
@@ -37,5 +37,5 @@ fn main() {
     println!("tags:   {:?}\n", meta.tags);
 
     // Only the body goes to the state, so the front matter isn't drawn.
-    common::print(&mut MarkdownState::new(body), &Theme::default());
+    common::print(&mut MarkdownState::new(body), &Theme::default())
 }

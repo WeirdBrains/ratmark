@@ -47,6 +47,8 @@ serde-saphyr = { version = "2", optional = true, default-features = false, featu
 toml = { version = "1.1", optional = true, default-features = false, features = ["std", "parse", "serde"] }
 
 [dev-dependencies]
+# Draws the examples. Its cell extensions write native links as OSC 8.
+ratatui-crossterm = { version = "0.1", features = ["cell-extensions"] }
 serde = { version = "1", features = ["derive"] }
 unicode-width = "0.2"
 
@@ -73,3 +75,4 @@ required-features = ["native-links"]
 # Ratatui's cell extensions, proposed in ratatui/ratatui#2854.
 [patch.crates-io]
 ratatui-core = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
+ratatui-crossterm = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
