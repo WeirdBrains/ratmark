@@ -40,9 +40,11 @@ feature, off by default, ratmark reads the text, links and simple formatting
 out of it with [html5gum]'s tokenizer instead of printing tags. Without it,
 HTML is left out.
 
-Two optional features help with Markdown from static sites. `front-matter`
-splits YAML or TOML front matter off the top of a document and has a small
-helper for reading values like the title.
+A few optional features help with Markdown from static sites.
+`front-matter-yaml` and `front-matter-toml` split YAML front matter, between
+`---` lines, or TOML front matter, between `+++` lines, off the top of a
+document, and deserialize it into your own serde types with [serde-saphyr]
+or [toml].
 
 The `kramdown` feature understands a couple of kramdown habits, since
 that's what Jekyll uses. Attribute lists like `{:.no_toc}` are dropped, and
@@ -82,7 +84,7 @@ Each feature has an example that prints a short document, drawn by
 
 ```sh
 cargo run --example syntax --features syntax
-cargo run --example front_matter --features front-matter
+cargo run --example front_matter --features front-matter-yaml
 cargo run --example kramdown --features kramdown
 cargo run --example html --features html
 cargo run --example native_links --features native-links
@@ -96,6 +98,8 @@ Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
 [Ratatui]: https://ratatui.rs
 [syntect]: https://github.com/trishume/syntect
 [html5gum]: https://github.com/untitaker/html5gum
+[serde-saphyr]: https://github.com/bourumir-wyngs/serde-saphyr
+[toml]: https://github.com/toml-rs/toml
 [Ratzilla]: https://github.com/orhun/ratzilla
 [avid-rustacean]: https://github.com/TylerBloom/avid-rustacean
 [ratatui#2854]: https://github.com/ratatui/ratatui/issues/2854

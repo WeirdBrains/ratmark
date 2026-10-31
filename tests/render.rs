@@ -154,13 +154,10 @@ fn tables_line_up() {
     assert_eq!(lines(md, 40), ["a   │ bb", "────┼───", "ccc │  d"]);
 }
 
-#[cfg(feature = "front-matter")]
+#[cfg(feature = "front-matter-yaml")]
 #[test]
-fn front_matter_is_kept_aside() {
-    let rendered = Rendered::render("---\ntitle: Hi\n---\n\nBody", 40, &Theme::default());
-    let front = rendered.front_matter.unwrap();
-    assert_eq!(front.get("title").as_deref(), Some("Hi"));
-    assert_eq!(rendered.lines.len(), 1);
+fn front_matter_is_left_out() {
+    assert_eq!(lines("---\ntitle: Hi\n---\n\nBody", 40), ["Body"]);
 }
 
 #[cfg(feature = "kramdown")]

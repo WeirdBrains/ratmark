@@ -2,7 +2,7 @@
 name = "ratmark"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.98"
 description = "Render Markdown into Ratatui text, with wrapping, links and syntax highlighting"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nixpulvis/ratmark"
@@ -14,8 +14,12 @@ default = []
 # Syntax highlighting for fenced code blocks, using syntect's pure Rust regex
 # engine so it also builds for wasm32.
 syntax = ["dep:syntect"]
-# Split YAML or TOML front matter off the top of documents.
-front-matter = []
+# Split YAML front matter, between `---` lines, off the top of documents,
+# and deserialize it with serde-saphyr.
+front-matter-yaml = ["dep:serde", "dep:serde-saphyr"]
+# Split TOML front matter, between `+++` lines, off the top of documents,
+# and deserialize it with toml.
+front-matter-toml = ["dep:serde", "dep:toml"]
 # Understand Markdown written for kramdown, like Jekyll sites.
 kramdown = []
 # Mark links in MarkdownView's cells, so backends that support it draw real
@@ -36,8 +40,12 @@ unicode-width = "0.2"
 syntect = { version = "5.3", optional = true, default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
 html5gum = { version = "0.9", optional = true }
 url = { version = "2.5", optional = true }
+serde = { version = "1", optional = true }
+serde-saphyr = { version = "2", optional = true, default-features = false, features = ["deserialize"] }
+toml = { version = "1.1", optional = true, default-features = false, features = ["std", "parse", "serde"] }
 
 [dev-dependencies]
+serde = { version = "1", features = ["derive"] }
 unicode-width = "0.2"
 
 [[example]]
@@ -46,7 +54,7 @@ required-features = ["syntax"]
 
 [[example]]
 name = "front_matter"
-required-features = ["front-matter"]
+required-features = ["front-matter-yaml"]
 
 [[example]]
 name = "kramdown"

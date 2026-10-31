@@ -87,9 +87,6 @@ impl<'t> Renderer<'t> {
             links,
             headings: self.headings,
             overflows: self.overflows,
-            // Filled in by `Rendered::render`, which splits it off first.
-            #[cfg(feature = "front-matter")]
-            front_matter: None,
         }
     }
 

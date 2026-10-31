@@ -22,9 +22,9 @@
 //! rather than wrapped, and [`MarkdownState::shift_by`] and
 //! [`MarkdownState::shift_at`] shift a block sideways.
 //!
-//! The `front-matter` feature, off by default, splits YAML or TOML front
-//! matter off the top of a document instead of rendering it. See
-//! [`front_matter`].
+//! The `front-matter-yaml` and `front-matter-toml` features, off by default,
+//! split YAML or TOML front matter off the top of a document instead of
+//! rendering it, and deserialize it with serde. See [`front_matter`].
 //!
 //! The `kramdown` feature, also off by default, understands a few habits of
 //! Markdown written for kramdown, Jekyll's default: attribute lists like
@@ -44,7 +44,7 @@ use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span, Text};
 use unicode_width::UnicodeWidthChar;
 
-#[cfg(feature = "front-matter")]
+#[cfg(any(feature = "front-matter-yaml", feature = "front-matter-toml"))]
 pub mod front_matter;
 #[cfg(feature = "kramdown")]
 pub mod kramdown;
@@ -67,9 +67,6 @@ pub struct Rendered {
     pub lines: Vec<Line<'static>>,
     /// Every link, in the order they appear.
     pub links: Vec<Link>,
-    /// The front matter between `---` or `+++` lines at the top.
-    #[cfg(feature = "front-matter")]
-    pub front_matter: Option<front_matter::FrontMatter>,
     /// Every heading, in order, for jumping to a section or listing them.
     pub headings: Vec<Heading>,
     /// Code blocks too wide for the page, which [`Rendered::lines`] shows
@@ -80,18 +77,13 @@ pub struct Rendered {
 impl Rendered {
     /// Lays `markdown` out in lines at most `width` columns wide.
     ///
-    /// With the `front-matter` feature, front matter at the top is split off
-    /// first and returned in [`Rendered::front_matter`].
+    /// With the `front-matter-yaml` or `front-matter-toml` feature, front
+    /// matter at the top is left out. Get it with
+    /// [`front_matter::FrontMatter::split`] or
+    /// [`MarkdownState::front_matter`].
     pub fn render(markdown: &str, width: u16, theme: &Theme) -> Self {
-        #[cfg(feature = "front-matter")]
-        {
-            let (front_matter, body) = front_matter::FrontMatter::split(markdown);
-            Self {
-                front_matter,
-                ..render::Renderer::new(theme, width).run(body)
-            }
-        }
-        #[cfg(not(feature = "front-matter"))]
+        #[cfg(any(feature = "front-matter-yaml", feature = "front-matter-toml"))]
+        let markdown = front_matter::FrontMatter::split(markdown).1;
         render::Renderer::new(theme, width).run(markdown)
     }
 
