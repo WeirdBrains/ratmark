@@ -23,8 +23,8 @@
 //! [`MarkdownState::shift_at`] shift a block sideways.
 //!
 //! The `front-matter-yaml` and `front-matter-toml` features, off by default,
-//! split YAML or TOML front matter off the top of a document instead of
-//! rendering it, and deserialize it with serde. See [`front_matter`].
+//! split YAML or TOML front matter off the top of a document before it's
+//! rendered, and deserialize it with serde. See [`front_matter`].
 //!
 //! The `kramdown` feature, also off by default, understands a few habits of
 //! Markdown written for kramdown, Jekyll's default: attribute lists like
@@ -44,7 +44,7 @@ use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span, Text};
 use unicode_width::UnicodeWidthChar;
 
-#[cfg(any(feature = "front-matter-yaml", feature = "front-matter-toml"))]
+#[cfg(feature = "_front-matter")]
 pub mod front_matter;
 #[cfg(feature = "kramdown")]
 pub mod kramdown;
@@ -77,13 +77,9 @@ pub struct Rendered {
 impl Rendered {
     /// Lays `markdown` out in lines at most `width` columns wide.
     ///
-    /// With the `front-matter-yaml` or `front-matter-toml` feature, front
-    /// matter at the top is left out. Get it with
-    /// [`front_matter::FrontMatter::split`] or
-    /// [`MarkdownState::front_matter`].
+    /// Front matter is laid out like any other text. Split it off first with
+    /// [`front_matter::FrontMatter::split`] to leave it out.
     pub fn render(markdown: &str, width: u16, theme: &Theme) -> Self {
-        #[cfg(any(feature = "front-matter-yaml", feature = "front-matter-toml"))]
-        let markdown = front_matter::FrontMatter::split(markdown).1;
         render::Renderer::new(theme, width).run(markdown)
     }
 

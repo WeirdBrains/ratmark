@@ -16,10 +16,12 @@ default = []
 syntax = ["dep:syntect"]
 # Split YAML front matter, between `---` lines, off the top of documents,
 # and deserialize it with serde-saphyr.
-front-matter-yaml = ["dep:serde", "dep:serde-saphyr"]
+front-matter-yaml = ["_front-matter", "dep:serde-saphyr"]
 # Split TOML front matter, between `+++` lines, off the top of documents,
 # and deserialize it with toml.
-front-matter-toml = ["dep:serde", "dep:toml"]
+front-matter-toml = ["_front-matter", "dep:toml"]
+# What the front matter formats share. Enable one of them instead.
+_front-matter = ["dep:serde"]
 # Understand Markdown written for kramdown, like Jekyll sites.
 kramdown = []
 # Mark links in MarkdownView's cells, so backends that support it draw real

@@ -154,12 +154,6 @@ fn tables_line_up() {
     assert_eq!(lines(md, 40), ["a   │ bb", "────┼───", "ccc │  d"]);
 }
 
-#[cfg(feature = "front-matter-yaml")]
-#[test]
-fn front_matter_is_left_out() {
-    assert_eq!(lines("---\ntitle: Hi\n---\n\nBody", 40), ["Body"]);
-}
-
 #[cfg(feature = "kramdown")]
 #[test]
 fn kramdown_attribute_lists_are_dropped() {

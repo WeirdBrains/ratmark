@@ -267,7 +267,7 @@ impl<'t> Renderer<'t> {
                     alt: String::new(),
                 })
             }
-            // Never parsed, as front matter is split off beforehand.
+            // Never parsed, as `options` leaves metadata blocks off.
             Tag::MetadataBlock(_) => {}
         }
     }

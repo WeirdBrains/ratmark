@@ -8,12 +8,11 @@
 //! - `front-matter-yaml`: YAML between `---` lines
 //! - `front-matter-toml`: TOML between `+++` lines
 //!
-//! With either feature, [`Rendered::render`](crate::Rendered::render) and so
-//! [`MarkdownView`](crate::MarkdownView) leave front matter out.
-//! [`FrontMatter::split`] finds it at the start of any text, and
-//! [`MarkdownState::front_matter`](crate::MarkdownState::front_matter) in a
-//! state's Markdown. [`FrontMatter::deserialize`] then reads it into your
-//! own serde type.
+//! Nothing else in ratmark looks for front matter. It's a prepass:
+//! [`FrontMatter::split`] it off, give the body to
+//! [`MarkdownState`](crate::MarkdownState) or
+//! [`Rendered::render`](crate::Rendered::render), and
+//! [`FrontMatter::deserialize`] the front matter into your own serde type.
 //!
 //! ```
 //! # #[cfg(feature = "front-matter-yaml")] {
@@ -94,18 +93,17 @@ impl<'a> FrontMatter<'a> {
             let Some(open) = lines.next().filter(is_fence) else {
                 continue;
             };
-            let rest = &text[open.len()..];
             let Some(close) = lines
                 .find(is_fence)
-                .and_then(|line| rest.substr_range(line))
+                .and_then(|line| text.substr_range(line))
             else {
                 continue;
             };
             let front = Self {
                 format,
-                raw: &rest[..close.start],
+                raw: &text[open.len()..close.start],
             };
-            return (Some(front), &rest[close.end..]);
+            return (Some(front), &text[close.end..]);
         }
         (None, text)
     }

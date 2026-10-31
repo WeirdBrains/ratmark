@@ -88,12 +88,6 @@ impl MarkdownState {
         &self.markdown
     }
 
-    /// The front matter at the top of the Markdown, which isn't drawn.
-    #[cfg(any(feature = "front-matter-yaml", feature = "front-matter-toml"))]
-    pub fn front_matter(&self) -> Option<crate::front_matter::FrontMatter<'_>> {
-        crate::front_matter::FrontMatter::split(&self.markdown).0
-    }
-
     /// The document as last laid out, once it has been drawn.
     pub fn rendered(&self) -> Option<&Rendered> {
         self.rendered.as_ref().map(|(_, r)| r)

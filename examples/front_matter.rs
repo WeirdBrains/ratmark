@@ -1,5 +1,5 @@
 //! Splits front matter off the top of a document, with the
-//! `front-matter-yaml` feature, rather than rendering it as text.
+//! `front-matter-yaml` feature, and draws only what comes after it.
 //!
 //!     cargo run --example front_matter --features front-matter-yaml
 
@@ -34,12 +34,8 @@ fn main() {
     let meta: Meta = front.deserialize().expect("the front matter is a Meta");
     println!("title:  {:?}", meta.title);
     println!("date:   {:?}", meta.date);
-    println!("tags:   {:?}", meta.tags);
-    println!("body:   {} bytes\n", body.len());
+    println!("tags:   {:?}\n", meta.tags);
 
-    // Rendering the whole document leaves the front matter out too, and the
-    // state hands it back.
-    let mut state = MarkdownState::new(MARKDOWN);
-    assert_eq!(state.front_matter(), Some(front));
-    common::print(&mut state, &Theme::default());
+    // Only the body goes to the state, so the front matter isn't drawn.
+    common::print(&mut MarkdownState::new(body), &Theme::default());
 }
