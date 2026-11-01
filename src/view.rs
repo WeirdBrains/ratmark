@@ -62,7 +62,7 @@ pub struct MarkdownState {
     /// A `#section` to scroll to once laid out.
     anchor: Option<String>,
     /// The document's own address, to make its links absolute.
-    #[cfg(feature = "native-links")]
+    #[cfg(feature = "links")]
     base: Option<url::Url>,
 }
 
@@ -77,8 +77,8 @@ impl MarkdownState {
     /// Sets the document's own address, so the links its cells carry are
     /// absolute and work outside the page, like in a terminal. An address
     /// that isn't a valid absolute URL is ignored, leaving links as written.
-    #[cfg(feature = "native-links")]
-    pub fn with_base(mut self, url: &str) -> Self {
+    #[cfg(feature = "links")]
+    pub fn with_link_base(mut self, url: &str) -> Self {
         self.base = url::Url::parse(url).ok();
         self
     }
@@ -336,7 +336,7 @@ impl StatefulWidget for MarkdownView<'_> {
                 }
             }
         }
-        #[cfg(feature = "native-links")]
+        #[cfg(feature = "links")]
         for (i, link) in rendered.links.iter().enumerate() {
             // One id per link, so a terminal treats the pieces of a wrapped
             // link as one.
@@ -380,7 +380,7 @@ fn region_rect(region: &Region, scroll: usize, area: Rect) -> Option<Rect> {
 
 /// Resolves `url` against `base`, the address of the page it's on. A link
 /// that can't be resolved is left as written.
-#[cfg(feature = "native-links")]
+#[cfg(feature = "links")]
 fn absolute(base: &url::Url, url: &str) -> String {
     base.join(url).map_or_else(|_| url.to_owned(), String::from)
 }
@@ -455,7 +455,7 @@ mod tests {
         assert!(!buf[(2, 0)].modifier.contains(Modifier::REVERSED));
     }
 
-    #[cfg(feature = "native-links")]
+    #[cfg(feature = "links")]
     #[test]
     fn cells_carry_links() {
         let mut state = MarkdownState::new("go [over there](/x) now");
@@ -468,7 +468,7 @@ mod tests {
         assert_eq!(buf[(2, 0)].hyperlink(), None);
     }
 
-    #[cfg(feature = "native-links")]
+    #[cfg(feature = "links")]
     #[test]
     fn absolute_links() {
         let base = "https://a.com/x/page";
@@ -481,7 +481,7 @@ mod tests {
         assert_eq!(absolute(&url, "mailto:a@b.c"), "mailto:a@b.c");
         let root = url::Url::parse("https://a.com").unwrap();
         assert_eq!(absolute(&root, "p"), "https://a.com/p");
-        let mut state = MarkdownState::new("[x](y)").with_base(base);
+        let mut state = MarkdownState::new("[x](y)").with_link_base(base);
         let buf = draw(&mut state, 10, 1);
         assert_eq!(
             buf[(0, 0)].hyperlink().map(|h| h.uri()),

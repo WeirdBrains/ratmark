@@ -23,11 +23,11 @@ which is what makes keyboard focus and clicks work on links in the middle of
 wrapped text. For drawing a document some other way, `Rendered::render`
 returns the wrapped lines and link positions directly.
 
-With the `native-links` feature, the view also writes each link's URL into
+With the `links` feature, the view also writes each link's URL into
 its cells, so backends that support it draw links the terminal or browser
 knows about, like OSC 8. It needs Ratatui's cell extensions, which aren't
-released yet ([ratatui#2854]), and `MarkdownState::with_base` makes the links
-absolute.
+released yet ([ratatui#2854]), and `MarkdownState::with_link_base` makes
+the links absolute.
 
 It handles CommonMark plus tables, footnotes, strikethrough, task lists and
 math. Code blocks can be syntax highlighted with [syntect], through the
@@ -88,7 +88,7 @@ cargo run --example syntax --features syntax
 cargo run --example front_matter --features front-matter-yaml
 cargo run --example kramdown --features kramdown
 cargo run --example html --features html
-cargo run --example native_links --features native-links
+cargo run --example links --features links
 ```
 
 ## License

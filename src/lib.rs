@@ -32,9 +32,9 @@
 //! Markdown inside `markdown="1"` elements is rendered as Markdown. See
 //! [`kramdown`].
 //!
-//! The `native-links` feature, off by default, writes each link's URL into
-//! the cells [`MarkdownView`] draws, so backends that support it show links
-//! the terminal or browser knows about. See [`MarkdownState::with_base`].
+//! The `links` feature, off by default, writes each link's URL into the
+//! cells [`MarkdownView`] draws, so backends that support it show links the
+//! terminal or browser knows about. See [`MarkdownState::with_link_base`].
 //!
 //! [Ratatui]: https://ratatui.rs
 

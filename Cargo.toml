@@ -30,7 +30,7 @@ kramdown = []
 # with the url crate. To leave out its Unicode domain support, which is most
 # of its size, pin `cargo update -p idna_adapter --precise 1.0.0` in your
 # application.
-native-links = ["ratatui-core/cell-extensions", "dep:url"]
+links = ["ratatui-core/cell-extensions", "dep:url"]
 # Show the text, links and simple formatting of HTML in the Markdown, read
 # with html5gum. Without it, HTML is left out.
 html = ["dep:html5gum"]
@@ -70,5 +70,5 @@ name = "html"
 required-features = ["html"]
 
 [[example]]
-name = "native_links"
-required-features = ["native-links"]
+name = "links"
+required-features = ["links"]

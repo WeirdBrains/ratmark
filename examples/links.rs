@@ -1,9 +1,9 @@
 //! Writes each link's address into the cells the view draws, with the
-//! `native-links` feature, so backends that support it draw real links.
-//! The crossterm backend prints them as OSC 8 links, which most terminals
-//! make clickable.
+//! `links` feature, so backends that support it draw real links. The
+//! crossterm backend prints them as OSC 8 links, which most terminals make
+//! clickable.
 //!
-//!     cargo run --example native_links --features native-links
+//!     cargo run --example links --features links
 //!
 //! The feature needs Ratatui's cell extensions, which aren't released yet
 //! (ratatui/ratatui#2854), so this crate uses ratatui-core from that branch,
@@ -21,6 +21,6 @@ wraps onto the next line](https://github.com/ratatui/ratatui/issues/2854) is \
 still one link.";
 
 fn main() -> std::io::Result<()> {
-    let mut state = MarkdownState::new(MARKDOWN).with_base("https://example.com/guide/start");
+    let mut state = MarkdownState::new(MARKDOWN).with_link_base("https://example.com/guide/start");
     common::print(&mut state, &Theme::default())
 }
