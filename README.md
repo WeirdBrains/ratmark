@@ -46,9 +46,10 @@ A few optional features help with Markdown from static sites.
 document, and deserialize it into your own serde types with [serde-saphyr]
 or [toml].
 
-The `kramdown` feature understands a couple of kramdown habits, since
-that's what Jekyll uses. Attribute lists like `{:.no_toc}` are dropped, and
-Markdown inside `markdown="1"` elements is rendered as Markdown.
+The `kramdown` feature reads Markdown written for kramdown, since that's what
+Jekyll uses, with [pulldown-kram]. `{:toc}` lists become tables of contents,
+attribute lists like `{:.no_toc}` are taken out of the text, and Markdown
+inside `markdown="1"` elements is rendered as Markdown.
 
 Two themes come with it. `Theme::gruvbox()` is the default, and
 `Theme::plain()` uses no colors so the terminal's own palette shows through.
@@ -101,6 +102,7 @@ Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
 [html5gum]: https://github.com/untitaker/html5gum
 [serde-saphyr]: https://github.com/bourumir-wyngs/serde-saphyr
 [toml]: https://github.com/toml-rs/toml
+[pulldown-kram]: https://github.com/nixpulvis/pulldown-kram
 [Ratzilla]: https://github.com/orhun/ratzilla
 [avid-rustacean]: https://github.com/TylerBloom/avid-rustacean
 [ratatui#2854]: https://github.com/ratatui/ratatui/issues/2854

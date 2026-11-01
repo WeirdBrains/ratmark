@@ -101,13 +101,13 @@
 #![cfg_attr(
     feature = "kramdown",
     doc = concat!(
-        "- The `kramdown` feature understands a few habits of Markdown written for\n",
-        "  kramdown, Jekyll's default.\n",
-        "  - A one item list followed by `{:toc}` is a table of contents, linking to\n",
-        "    each heading not marked `{:.no_toc}`.\n",
-        "  - Attribute lists, like `{:.no_toc}`, are dropped from the text, and a\n",
-        "    class right after inline code, like `` `x`{:.new} ``, is styled by\n",
-        "    [`Theme::classes`].\n",
+        "- The `kramdown` feature reads Markdown written for kramdown, Jekyll's default,\n",
+        "  with [pulldown-kram](https://docs.rs/pulldown-kram), which lists how much of\n",
+        "  kramdown it understands.\n",
+        "  - A list followed by `{:toc}` is a table of contents, linking to each heading\n",
+        "    without the class `no_toc`.\n",
+        "  - Attribute lists, like `{:.no_toc}`, are taken out of the text, and classes\n",
+        "    on inline code, like `` `x`{:.new} ``, are styled by [`Theme::classes`].\n",
         "  - Markdown inside `markdown=\"1\"` elements is rendered as Markdown.\n",
         "  - A line of only a span tag, like `<img>`, starts a paragraph rather than\n",
         "    an HTML block.",
@@ -140,8 +140,6 @@ mod writer;
 
 #[cfg(feature = "_front-matter")]
 pub mod front_matter;
-#[cfg(feature = "kramdown")]
-mod kramdown;
 #[cfg(feature = "syntax")]
 mod syntax;
 

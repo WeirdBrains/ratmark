@@ -1,6 +1,8 @@
 //! Walks pulldown-cmark's events and lays the document out in lines.
 
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
+use std::borrow::Cow;
+
+use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Tag, TagEnd};
 use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span};
 
@@ -14,6 +16,8 @@ mod html;
 
 const BULLETS: [&str; 3] = ["• ", "◦ ", "▪ "];
 
+/// Heading attributes are left off: pulldown-cmark panics reading some of
+/// them, and kramdown, the one dialect here with heading ids, has its own.
 fn options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_FOOTNOTES
@@ -21,7 +25,6 @@ fn options() -> Options {
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_MATH
         | Options::ENABLE_SMART_PUNCTUATION
-        | Options::ENABLE_HEADING_ATTRIBUTES
 }
 
 pub(crate) struct Renderer<'t> {
@@ -52,34 +55,12 @@ impl<'t> Renderer<'t> {
 
     pub fn run(mut self, markdown: &str) -> Rendered {
         #[cfg(feature = "kramdown")]
-        let markdown = crate::kramdown::Kramdown::to_commonmark(markdown);
+        for (event, attributes) in pulldown_kram::Document::new(markdown, options()).events() {
+            self.next(event, &attributes.classes);
+        }
         #[cfg(not(feature = "kramdown"))]
-        let markdown = std::borrow::Cow::Borrowed(markdown);
-        // Peekable for kramdown's classes after inline code.
-        let mut events = Parser::new_ext(&markdown, options()).peekable();
-        #[allow(clippy::while_let_on_iterator)]
-        while let Some(event) = events.next() {
-            match (self.capture.take(), event) {
-                (Some(capture), event) => self.captured(capture, event),
-                // A kramdown attribute list right after inline code gives it
-                // classes.
-                #[cfg(feature = "kramdown")]
-                (None, Event::Code(code)) => {
-                    let classes = match events.peek() {
-                        Some(Event::Text(text)) => {
-                            crate::kramdown::AttributeList::split(text).0.classes
-                        }
-                        _ => Vec::new(),
-                    };
-                    let style = self.code_style();
-                    let style = self
-                        .theme
-                        .class_style(classes.iter().copied())
-                        .map_or(style, |class| style.patch(class));
-                    self.piece(code.into_string(), style);
-                }
-                (None, event) => self.event(event),
-            }
+        for event in pulldown_cmark::Parser::new_ext(markdown, options()) {
+            self.next(event, &[]);
         }
         let (lines, links) = self.writer.finish();
         Rendered {
@@ -87,6 +68,25 @@ impl<'t> Renderer<'t> {
             links,
             headings: self.headings,
             overflows: self.overflows,
+        }
+    }
+
+    /// Handles the next event, which kramdown's attribute lists may give
+    /// `classes`.
+    #[cfg_attr(not(feature = "kramdown"), allow(unused_variables))]
+    fn next(&mut self, event: Event<'_>, classes: &[Cow<'_, str>]) {
+        match (self.capture.take(), event) {
+            (Some(capture), event) => self.captured(capture, event),
+            #[cfg(feature = "kramdown")]
+            (None, Event::Code(code)) => {
+                let style = self.code_style();
+                let style = self
+                    .theme
+                    .class_style(classes.iter().map(|c| c.as_ref()))
+                    .map_or(style, |class| style.patch(class));
+                self.piece(code.into_string(), style);
+            }
+            (None, event) => self.event(event),
         }
     }
 
@@ -130,15 +130,7 @@ impl<'t> Renderer<'t> {
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
-            Event::Text(text) => {
-                // kramdown attribute lists, like `{:.no_toc}`, mean nothing
-                // here and would otherwise show up as text.
-                #[cfg(feature = "kramdown")]
-                let text = crate::kramdown::AttributeList::split(&text).1;
-                if !text.is_empty() {
-                    self.text(text.to_string());
-                }
-            }
+            Event::Text(text) => self.text(text.into_string()),
             Event::Code(code) => {
                 let style = self.code_style();
                 self.piece(code.into_string(), style);

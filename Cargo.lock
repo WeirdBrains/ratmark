@@ -681,6 +681,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-kram"
+version = "0.1.0"
+source = "git+https://github.com/nixpulvis/pulldown-kram#87f3ab106f67a4f4a8beb243317e6c3b2081e010"
+dependencies = [
+ "pulldown-cmark",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -724,6 +732,7 @@ version = "0.1.0"
 dependencies = [
  "html5gum",
  "pulldown-cmark",
+ "pulldown-kram",
  "ratatui-core",
  "ratatui-crossterm",
  "serde",

@@ -189,6 +189,17 @@ fn kramdown_attribute_lists_are_dropped() {
     );
 }
 
+/// pulldown-cmark panics reading heading attributes from braces over a setext
+/// underline in nested quotes.
+#[test]
+fn braces_over_a_setext_heading_in_quotes() {
+    let text = lines("> > o\n> >   {: .x}\n> > ---\n", 40);
+    #[cfg(not(feature = "kramdown"))]
+    assert_eq!(text, ["▎ ▎ o {: .x}"]);
+    #[cfg(feature = "kramdown")]
+    assert_eq!(text, ["▎ ▎ o"]);
+}
+
 #[test]
 fn images_become_links() {
     let rendered = Rendered::render("![a cat](/cat.png)", 40, &Theme::default());

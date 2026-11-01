@@ -25,8 +25,9 @@ front-matter-yaml = ["_front-matter", "dep:serde-saphyr"]
 front-matter-toml = ["_front-matter", "dep:toml"]
 # What the front matter formats share. Enable one of them instead.
 _front-matter = ["dep:serde"]
-# Understand Markdown written for kramdown, like Jekyll sites.
-kramdown = []
+# Understand Markdown written for kramdown, like Jekyll sites, read with
+# pulldown-kram.
+kramdown = ["dep:pulldown-kram"]
 # Mark links in MarkdownView's cells, so backends that support it draw real
 # links, like OSC 8 in a terminal. Needs Ratatui's cell extensions, which
 # aren't released yet, see ratatui/ratatui#2854. Links are made absolute
@@ -40,6 +41,7 @@ html = ["dep:html5gum"]
 
 [dependencies]
 pulldown-cmark = { version = "0.13", default-features = false }
+pulldown-kram = { git = "https://github.com/nixpulvis/pulldown-kram", optional = true }
 # Ratatui's cell extensions, proposed in ratatui/ratatui#2854.
 ratatui-core = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
 unicode-width = "0.2"
