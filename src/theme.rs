@@ -6,17 +6,24 @@ use ratatui_core::style::{Color, Modifier, Style};
 /// block they appear in, so a theme only needs to set what changes.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
+    /// Plain text, which everything else is patched over.
     pub text: Style,
     /// Heading text, by level from `#` to `######`.
     pub headings: [Style; 6],
     /// The style of `#` marks drawn in front of each heading, Markdown or
     /// HTML, to show its level. `None`, the default, draws no marks.
     pub heading_marker: Option<Style>,
+    /// `*Emphasis*`.
     pub emphasis: Style,
+    /// `**Strong**` text.
     pub strong: Style,
+    /// `~~Struck through~~` text.
     pub strikethrough: Style,
+    /// Link text.
     pub link: Style,
+    /// An image's `[image: alt]` label, patched over the link style.
     pub image: Style,
+    /// Inline `code`.
     pub code: Style,
     /// Fenced and indented code. The background fills the block's width.
     pub code_block: Style,
@@ -24,14 +31,21 @@ pub struct Theme {
     /// show code cut off at the edges. Without it the code takes the full
     /// width, and the marks are drawn over its first and last columns.
     pub code_block_padding: bool,
+    /// Text in a block quote.
     pub quote: Style,
     /// The bar down the side of a block quote.
     pub quote_marker: Style,
+    /// List bullets and numbers, and task list boxes.
     pub list_marker: Style,
+    /// A horizontal rule.
     pub rule: Style,
+    /// Inline and display math, shown as written.
     pub math: Style,
+    /// Footnote references and labels, like `[1]`.
     pub footnote: Style,
+    /// The lines between a table's columns and rows.
     pub table_border: Style,
+    /// A table's header row.
     pub table_header: Style,
     /// Draw a rule between body rows too, not just under the header.
     pub table_row_rules: bool,

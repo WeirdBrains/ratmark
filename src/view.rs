@@ -32,6 +32,7 @@ pub struct MarkdownView<'t> {
 }
 
 impl<'t> MarkdownView<'t> {
+    /// A view drawing with `theme`.
     pub fn new(theme: &'t Theme) -> Self {
         Self {
             theme,
@@ -147,6 +148,7 @@ pub struct MarkdownState {
 }
 
 impl MarkdownState {
+    /// The state of a view showing `markdown`, at the top.
     pub fn new(markdown: impl Into<String>) -> Self {
         Self {
             markdown: markdown.into(),

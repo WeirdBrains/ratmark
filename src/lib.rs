@@ -125,6 +125,8 @@
 //! [Ratatui]: https://ratatui.rs
 //! [`StatefulWidget`]: ratatui_core::widgets::StatefulWidget
 
+#![warn(missing_docs)]
+
 use ratatui_core::text::{Line, Text};
 
 mod overflow;
@@ -190,13 +192,16 @@ impl Rendered {
 pub struct Heading {
     /// 1 for `#` through 6 for `######`.
     pub level: u8,
+    /// Its text, without markup.
     pub text: String,
+    /// The line it starts on.
     pub line: usize,
 }
 
 /// A link and the places it was drawn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Link {
+    /// Where it goes, as written in the document.
     pub url: String,
     /// Where the link's text landed. A link that wraps has one region per
     /// line.
@@ -206,7 +211,10 @@ pub struct Link {
 /// A stretch of one line, in columns from the start of the line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Region {
+    /// The line it's on.
     pub line: usize,
+    /// The first column it covers.
     pub start: u16,
+    /// The column after the last it covers.
     pub end: u16,
 }
