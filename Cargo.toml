@@ -9,6 +9,9 @@ repository = "https://github.com/nixpulvis/ratmark"
 keywords = ["markdown", "ratatui", "tui", "terminal", "wasm"]
 categories = ["command-line-interface", "text-processing"]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = []
 # Syntax highlighting for fenced code blocks, using syntect's pure Rust regex

@@ -1,41 +1,129 @@
-//! Render Markdown into [Ratatui] text.
+//! Render Markdown as a [Ratatui] [`StatefulWidget`], or into Ratatui text.
 //!
 //! [`MarkdownView`] is a widget that shows a document, scrolled, with links
-//! that can be focused from the keyboard or found under a click. Its
-//! [`MarkdownState`] holds the document and lays it out again whenever the
-//! width changes.
-//!
-//! Underneath, [`Rendered::render`] lays a document out for a given width
-//! and returns its lines along with where each link landed, for drawing it
-//! some other way.
+//! you can select with the keyboard or the mouse. Its [`MarkdownState`]
+//! holds the document and lays it out again whenever the width changes.
 //!
 //! ```
-//! let rendered = ratmark::Rendered::render("# Hi\n\nSee [the docs](https://docs.rs).", 40, &ratmark::Theme::default());
+//! use ratmark::{MarkdownState, MarkdownView, Theme};
+//! # let backend = ratatui_core::backend::TestBackend::new(40, 5);
+//! # let mut terminal = ratatui_core::terminal::Terminal::new(backend)?;
+//!
+//! let theme = Theme::default();
+//! let mut state = MarkdownState::new("# Hi\n\nSee [the docs](https://docs.rs).");
+//!
+//! terminal.draw(|frame| {
+//!     let view = MarkdownView::new(&theme);
+//!     frame.render_stateful_widget(view, frame.area(), &mut state);
+//! })?;
+//!
+//! // The link under a click.
+//! let clicked = state.link_at(4, 2).map(|l| l.url.as_str());
+//! assert_eq!(clicked, Some("https://docs.rs"));
+//!
+//! // The link focused from the keyboard.
+//! state.focus_next();
+//! let focused = state.focused().map(|l| l.url.as_str());
+//! assert_eq!(focused, Some("https://docs.rs"));
+//! # Ok::<(), Box<dyn std::error::Error>>(())
+//! ```
+//!
+//! Underneath, [`Rendered::render`] lays a document out for a given width
+//! and returns its lines along with where each link landed.
+//!
+//! ```
+//! use ratmark::{Rendered, Theme};
+//!
+//! let theme = Theme::default();
+//! let markdown = "# Hi\n\nSee [the docs](https://docs.rs).";
+//! let rendered = Rendered::render(markdown, 40, &theme);
+//!
+//! assert_eq!(rendered.lines[0].to_string(), "Hi");
+//! assert_eq!(rendered.lines[0].spans[0].style, theme.headings[0]);
 //! assert_eq!(rendered.links[0].url, "https://docs.rs");
 //! ```
 //!
+//! A [`Theme`] holds every style. [`Theme::gruvbox`] is the default, and
+//! [`Theme::plain`] uses no colors, so the terminal's own palette shows
+//! through. Every style is a public field, so making your own is a struct
+//! literal.
+//!
 //! CommonMark plus tables, footnotes, strikethrough, task lists and math are
-//! supported. With the `html` feature, HTML embedded in the Markdown is read
-//! for its text, links and simple formatting, and without it HTML is left
-//! out. Code blocks are syntax highlighted with the `syntax`
-//! feature, which is off by default. Code too wide for the page is cut off
-//! rather than wrapped, and [`MarkdownState::shift_by`] and
-//! [`MarkdownState::shift_at`] shift a block sideways.
+//! supported. Code too wide for the page scrolls sideways rather than
+//! wrapping.
 //!
-//! The `front-matter-yaml` and `front-matter-toml` features, off by default,
-//! split YAML or TOML front matter off the top of a document before it's
-//! rendered, and deserialize it with serde. See [`front_matter`].
-//!
-//! The `kramdown` feature, also off by default, understands a few habits of
-//! Markdown written for kramdown, Jekyll's default: attribute lists like
-//! `{:.no_toc}` are dropped, `{:toc}` lists become tables of contents, and
-//! Markdown inside `markdown="1"` elements is rendered as Markdown.
-//!
-//! The `links` feature, off by default, writes each link's URL into the
-//! cells [`MarkdownView`] draws, so backends that support it show links the
-//! terminal or browser knows about. See [`MarkdownState::with_link_base`].
+#![cfg_attr(
+    any(
+        feature = "links",
+        feature = "syntax",
+        feature = "html",
+        feature = "kramdown",
+        feature = "_front-matter",
+    ),
+    doc = "# Features"
+)]
+#![cfg_attr(
+    feature = "links",
+    doc = concat!(
+        "- The `links` feature draws real links, which the terminal or browser can open,\n",
+        "  on backends that support them. [`MarkdownState::with_link_base`] makes\n",
+        "  relative links absolute.",
+    )
+)]
+#![cfg_attr(
+    feature = "syntax",
+    doc = "- The `syntax` feature highlights code blocks with syntect."
+)]
+#![cfg_attr(
+    feature = "html",
+    doc = concat!(
+        "- The `html` feature reads HTML embedded in the Markdown for its text, links\n",
+        "  and simple formatting.\n",
+        "  - `<a href>` is a link.\n",
+        "  - `<strong>` and `<b>` are strong.\n",
+        "  - `<em>`, `<i>` and `<cite>` are emphasized.\n",
+        "  - `<code>`, `<kbd>`, `<samp>` and `<tt>` are code.\n",
+        "  - `<s>`, `<del>` and `<strike>` are struck through.\n",
+        "  - `<small>`, `<sub>` and `<sup>` are small.\n",
+        "  - `<h1>` to `<h6>` are headings.\n",
+        "  - `<pre>` is a code block, `<br>` a line break and `<hr>` a rule.\n",
+        "  - `<li>` is a bulleted item, in `<ul>` or `<ol>`.\n",
+        "  - `<img src alt>` is an image, like Markdown's, and `<svg aria-label>` a\n",
+        "    figure.\n",
+        "  - `<p>`, `<div>`, `<blockquote>`, `<section>`, `<article>`, `<header>`,\n",
+        "    `<footer>`, `<figure>`, `<table>`, `<tr>`, `<dl>`, `<dt>` and `<dd>` start\n",
+        "    a new line, and `<td>` and `<th>` are spaced apart.\n",
+        "  - Any element's `class` is styled by [`Theme::classes`].\n",
+        "  - Other tags show only their text. Comments, and the content of `<script>`,\n",
+        "    `<style>`, `<template>`, `<head>` and `<svg>`, are left out.",
+    )
+)]
+#![cfg_attr(
+    feature = "kramdown",
+    doc = concat!(
+        "- The `kramdown` feature understands a few habits of Markdown written for\n",
+        "  kramdown, Jekyll's default.\n",
+        "  - A one item list followed by `{:toc}` is a table of contents, linking to\n",
+        "    each heading not marked `{:.no_toc}`.\n",
+        "  - Attribute lists, like `{:.no_toc}`, are dropped from the text, and a\n",
+        "    class right after inline code, like `` `x`{:.new} ``, is styled by\n",
+        "    [`Theme::classes`].\n",
+        "  - Markdown inside `markdown=\"1\"` elements is rendered as Markdown.\n",
+        "  - A line of only a span tag, like `<img>`, starts a paragraph rather than\n",
+        "    an HTML block.",
+    )
+)]
+#![cfg_attr(
+    feature = "_front-matter",
+    doc = concat!(
+        "- The `front-matter-yaml` and `front-matter-toml` features add\n",
+        "  [`front_matter`], for splitting YAML or TOML front matter off the top of a\n",
+        "  document before rendering the rest, and deserializing it with serde.",
+    )
+)]
 //!
 //! [Ratatui]: https://ratatui.rs
+//! [`StatefulWidget`]: ratatui_core::widgets::StatefulWidget
 
 use std::ops::Range;
 
@@ -77,8 +165,11 @@ pub struct Rendered {
 impl Rendered {
     /// Lays `markdown` out in lines at most `width` columns wide.
     ///
-    /// Front matter is laid out like any other text. Split it off first with
-    /// [`front_matter::FrontMatter::split`] to leave it out.
+    /// Front matter is laid out like any other text.
+    #[cfg_attr(
+        feature = "_front-matter",
+        doc = "Split it off first with [`front_matter::FrontMatter::split`] to leave it out."
+    )]
     pub fn render(markdown: &str, width: u16, theme: &Theme) -> Self {
         render::Renderer::new(theme, width).run(markdown)
     }
