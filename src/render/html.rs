@@ -94,8 +94,8 @@ impl Renderer<'_> {
         let before = self.writer.lines_written();
         self.html_tokens(html);
         // A `<pre>` left open ends with the block.
-        if let Some(Capture::Pre(pre)) = self.capture.take() {
-            self.pre(&pre);
+        if matches!(self.capture, Some(Capture::Pre(_))) {
+            self.draw_capture();
         }
         // So do HTML styles and links.
         while matches!(
@@ -124,9 +124,7 @@ impl Renderer<'_> {
                 match &token {
                     Token::Text(text) => pre.push_str(text),
                     Token::Close(name) if name == "pre" => {
-                        if let Some(Capture::Pre(pre)) = self.capture.take() {
-                            self.pre(&pre);
-                        }
+                        self.draw_capture();
                         self.close_class(name);
                     }
                     _ => {}
@@ -155,19 +153,21 @@ impl Renderer<'_> {
             return;
         }
         let style = classes.and_then(|c| self.theme.class_style(c.split_whitespace()));
-        let inside = self.is_open(|k| matches!(k, Kind::Class { name: n, .. } if n == name));
-        if style.is_some() || inside {
-            let style = style.unwrap_or_default();
-            let kind = Kind::Class {
-                name: name.to_owned(),
-                background: style.bg,
-            };
-            self.open(kind, style);
+        let kind = Kind::Class {
+            name: name.to_owned(),
+            background: style.and_then(|style| style.bg),
+        };
+        if style.is_some() || self.is_open(&kind) {
+            self.open(kind, style.unwrap_or_default());
         }
     }
 
     fn close_class(&mut self, name: &str) {
-        self.close(|k| matches!(k, Kind::Class { name: n, .. } if n == name));
+        let kind = Kind::Class {
+            name: name.to_owned(),
+            background: None,
+        };
+        self.close(&kind);
     }
 
     fn open_tag(&mut self, token: &Token, name: &str) {
@@ -235,9 +235,9 @@ impl Renderer<'_> {
 
     fn close_tag(&mut self, name: &str) {
         match name {
-            "li" if self.is_open(|k| *k == Kind::HtmlItem) => {
+            "li" if self.is_open(&Kind::HtmlItem) => {
                 self.writer.flush();
-                self.close(|k| *k == Kind::HtmlItem);
+                self.close(&Kind::HtmlItem);
             }
             "p" | "div" | "li" | "ul" | "ol" | "tr" | "table" | "blockquote" | "section"
             | "article" | "header" | "footer" | "figure" | "dl" | "dt" | "dd" => {
@@ -247,7 +247,8 @@ impl Renderer<'_> {
             _ => {
                 // Only when it's the innermost, as HTML is often
                 // left unclosed.
-                if matches!(self.open.last(), Some(o) if o.kind == Kind::Html(name.to_owned())) {
+                if matches!(self.open.last(), Some(o) if o.kind.is_like(&Kind::Html(name.to_owned())))
+                {
                     self.open.pop();
                 }
                 if name.len() == 2 && name.starts_with('h') {
@@ -258,7 +259,7 @@ impl Renderer<'_> {
     }
 
     /// Draws the text of an HTML `<pre>` like a code block.
-    fn pre(&mut self, text: &str) {
+    pub(super) fn pre(&mut self, text: &str) {
         // Like a browser, skip one newline right after `<pre>`.
         let text = text.strip_prefix('\n').unwrap_or(text);
         self.code_block("", text);

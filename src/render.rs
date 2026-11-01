@@ -1,6 +1,6 @@
 //! Walks pulldown-cmark's events and lays the document out in lines.
 
-use pulldown_cmark::{CodeBlockKind, CowStr, Event, HeadingLevel, Options, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Tag, TagEnd};
 use ratatui_core::style::Style;
 
 use crate::table::Table;
@@ -13,16 +13,15 @@ mod html;
 
 const BULLETS: [&str; 3] = ["• ", "◦ ", "▪ "];
 
-/// Heading attributes are left off: pulldown-cmark panics reading some of
-/// them, and kramdown, the one dialect here with heading ids, has its own.
-fn options() -> Options {
-    Options::ENABLE_TABLES
-        | Options::ENABLE_FOOTNOTES
-        | Options::ENABLE_STRIKETHROUGH
-        | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_MATH
-        | Options::ENABLE_SMART_PUNCTUATION
-}
+/// What's read beyond CommonMark. Heading attributes are left off:
+/// pulldown-cmark panics reading some of them, and kramdown, the one
+/// dialect here with heading ids, has its own.
+const OPTIONS: Options = Options::ENABLE_TABLES
+    .union(Options::ENABLE_FOOTNOTES)
+    .union(Options::ENABLE_STRIKETHROUGH)
+    .union(Options::ENABLE_TASKLISTS)
+    .union(Options::ENABLE_MATH)
+    .union(Options::ENABLE_SMART_PUNCTUATION);
 
 pub(crate) struct Renderer<'t> {
     theme: &'t Theme,
@@ -31,6 +30,9 @@ pub(crate) struct Renderer<'t> {
     overflows: Vec<Overflow>,
     /// Code blocks written so far.
     code_blocks: usize,
+    /// Where the open heading's text starts in the inline content, past its
+    /// `#` marks.
+    heading: Option<usize>,
     open: Vec<Open>,
     capture: Option<Capture>,
     table: Option<Table>,
@@ -44,6 +46,7 @@ impl<'t> Renderer<'t> {
             headings: Vec::new(),
             overflows: Vec::new(),
             code_blocks: 0,
+            heading: None,
             open: Vec::new(),
             capture: None,
             table: None,
@@ -52,11 +55,11 @@ impl<'t> Renderer<'t> {
 
     pub fn run(mut self, markdown: &str) -> Rendered {
         #[cfg(feature = "kramdown")]
-        for (event, attributes) in pulldown_kram::Document::new(markdown, options()).events() {
+        for (event, attributes) in pulldown_kram::Document::new(markdown, OPTIONS).events() {
             self.next(event, &attributes.classes);
         }
         #[cfg(not(feature = "kramdown"))]
-        for event in pulldown_cmark::Parser::new_ext(markdown, options()) {
+        for event in pulldown_cmark::Parser::new_ext(markdown, OPTIONS) {
             self.next(event, &[]);
         }
         let (lines, links) = self.writer.finish();
@@ -70,66 +73,17 @@ impl<'t> Renderer<'t> {
 
     /// Handles the next event, which kramdown's attribute lists may give
     /// `classes`.
-    #[cfg_attr(not(feature = "kramdown"), allow(unused_variables))]
     fn next(&mut self, event: Event<'_>, classes: &[CowStr<'_>]) {
-        match (self.capture.take(), event) {
-            (Some(capture), event) => self.captured(capture, event),
-            #[cfg(feature = "kramdown")]
-            (None, Event::Code(code)) => {
-                let style = self.code_style();
-                let style = self
-                    .theme
-                    .class_style(classes.iter().map(|c| c.as_ref()))
-                    .map_or(style, |class| style.patch(class));
-                self.piece(code.into_string(), style);
-            }
-            (None, event) => self.event(event),
+        if self.capture.is_some() {
+            self.captured(&event);
+            return;
         }
-    }
-
-    /// Handles an event while `capture` is being read.
-    fn captured(&mut self, capture: Capture, event: Event<'_>) {
-        match (capture, event) {
-            (Capture::Code { lang, mut text }, Event::Text(more)) => {
-                text.push_str(&more);
-                self.capture = Some(Capture::Code { lang, text });
-            }
-            (Capture::Code { lang, text }, Event::End(TagEnd::CodeBlock)) => {
-                self.code_block(&lang, &text)
-            }
-            (Capture::Image { url, mut alt }, Event::Text(more) | Event::Code(more)) => {
-                alt.push_str(&more);
-                self.capture = Some(Capture::Image { url, alt });
-            }
-            (Capture::Image { url, alt }, Event::End(TagEnd::Image)) => self.image(&url, &alt),
-            #[cfg(feature = "html")]
-            (Capture::HtmlBlock(mut html), Event::Html(more)) => {
-                html.push_str(&more);
-                self.capture = Some(Capture::HtmlBlock(html));
-            }
-            #[cfg(feature = "html")]
-            (Capture::HtmlBlock(html), Event::End(TagEnd::HtmlBlock)) => self.html_block(&html),
-            #[cfg(feature = "html")]
-            (pre @ Capture::Pre(_), Event::Html(html) | Event::InlineHtml(html)) => {
-                self.capture = Some(pre);
-                self.html_tokens(&html);
-            }
-            #[cfg(feature = "html")]
-            (Capture::Pre(mut pre), Event::Text(more)) => {
-                pre.push_str(&more);
-                self.capture = Some(Capture::Pre(pre));
-            }
-            (capture, _) => self.capture = Some(capture),
-        }
-    }
-
-    fn event(&mut self, event: Event<'_>) {
         match event {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
             Event::Text(text) => self.text(text.into_string()),
             Event::Code(code) => {
-                let style = self.code_style();
+                let style = self.code_style(classes);
                 self.piece(code.into_string(), style);
             }
             Event::InlineMath(math) | Event::DisplayMath(math) => {
@@ -159,13 +113,48 @@ impl<'t> Renderer<'t> {
         }
     }
 
+    /// Reads `event` into the content being captured, drawing it once it
+    /// ends. Anything else inside it is left out.
+    fn captured(&mut self, event: &Event<'_>) {
+        match (self.capture.as_mut(), event) {
+            (Some(Capture::Code { text, .. }), Event::Text(more)) => text.push_str(more),
+            (Some(Capture::Image { alt, .. }), Event::Text(more) | Event::Code(more)) => {
+                alt.push_str(more)
+            }
+            #[cfg(feature = "html")]
+            (Some(Capture::HtmlBlock(html)), Event::Html(more)) => html.push_str(more),
+            #[cfg(feature = "html")]
+            (Some(Capture::Pre(pre)), Event::Text(more)) => pre.push_str(more),
+            #[cfg(feature = "html")]
+            (Some(Capture::Pre(_)), Event::Html(html) | Event::InlineHtml(html)) => {
+                self.html_tokens(html)
+            }
+            (Some(capture), Event::End(end)) if capture.ends_at(end) => self.draw_capture(),
+            _ => {}
+        }
+    }
+
+    /// Draws the content captured, now that it's read whole.
+    fn draw_capture(&mut self) {
+        match self.capture.take() {
+            Some(Capture::Code { lang, text }) => self.code_block(&lang, &text),
+            Some(Capture::Image { url, alt }) => self.image(&url, &alt),
+            #[cfg(feature = "html")]
+            Some(Capture::HtmlBlock(html)) => self.html_block(&html),
+            #[cfg(feature = "html")]
+            Some(Capture::Pre(pre)) => self.pre(&pre),
+            None => {}
+        }
+    }
+
     fn start(&mut self, tag: Tag<'_>) {
         match tag {
             Tag::Paragraph => self.writer.flush(),
             Tag::Heading { level, .. } => {
                 self.writer.flush();
-                let level = heading_index(level);
+                let level = level as usize - 1;
                 self.heading_marker(level);
+                self.heading = Some(self.writer.inline().len());
                 self.open(Kind::Heading, self.theme.headings[level]);
             }
             Tag::BlockQuote(_) => {
@@ -265,21 +254,17 @@ impl<'t> Renderer<'t> {
         match tag {
             TagEnd::Paragraph | TagEnd::DefinitionList => self.writer.end_block(),
             TagEnd::Heading(level) => {
-                self.close(|k| *k == Kind::Heading);
-                // Skip the `#` marks, if there are any.
-                let marks = usize::from(self.theme.heading_marker.is_some());
-                let text: String = self
-                    .writer
-                    .inline()
+                self.close(&Kind::Heading);
+                let from = self.heading.take().unwrap_or(0);
+                let text: String = self.writer.inline()[from..]
                     .iter()
-                    .skip(marks)
                     .filter_map(|i| match i {
                         Inline::Piece(p) => Some(p.text.as_str()),
                         Inline::Break => None,
                     })
                     .collect();
                 self.headings.push(Heading {
-                    level: heading_index(level) as u8 + 1,
+                    level: level as u8,
                     text: text.trim().to_owned(),
                     line: self.writer.next_block_line(),
                 });
@@ -287,28 +272,28 @@ impl<'t> Renderer<'t> {
             }
             TagEnd::BlockQuote(_) => {
                 self.writer.flush();
-                self.close(|k| *k == Kind::Quote);
+                self.close(&Kind::Quote);
                 self.writer.set_gap(true);
             }
             TagEnd::List(_) => {
                 self.writer.flush();
-                self.close(|k| matches!(k, Kind::List(_)));
+                self.close(&Kind::List(None));
                 // A list nested in a tight list's item runs straight on to
                 // the next item.
-                let nested = self.is_open(|k| matches!(k, Kind::List(_)));
+                let nested = self.is_open(&Kind::List(None));
                 self.writer.set_gap(!nested);
             }
             TagEnd::Item => {
                 self.writer.flush();
-                self.close(|k| *k == Kind::Item);
+                self.close(&Kind::Item);
             }
             TagEnd::DefinitionListDefinition => {
                 self.writer.flush();
-                self.close(|k| *k == Kind::Definition);
+                self.close(&Kind::Definition);
             }
             TagEnd::FootnoteDefinition => {
                 self.writer.flush();
-                self.close(|k| *k == Kind::Footnote);
+                self.close(&Kind::Footnote);
                 self.writer.set_gap(true);
             }
             TagEnd::DefinitionListTitle => self.writer.flush(),
@@ -319,7 +304,7 @@ impl<'t> Renderer<'t> {
                 }
             }
             TagEnd::TableHead => {
-                self.close(|k| *k == Kind::TableHead);
+                self.close(&Kind::TableHead);
             }
             TagEnd::TableRow => {}
             TagEnd::Table => self.table(),
@@ -328,10 +313,10 @@ impl<'t> Renderer<'t> {
             | TagEnd::Strikethrough
             | TagEnd::Superscript
             | TagEnd::Subscript => {
-                self.close(|k| *k == Kind::Style);
+                self.close(&Kind::Style);
             }
             TagEnd::Link => {
-                self.close(|k| *k == Kind::Link);
+                self.close(&Kind::Link);
             }
             // Read whole while captured, in `captured`.
             TagEnd::CodeBlock | TagEnd::Image | TagEnd::HtmlBlock | TagEnd::MetadataBlock(_) => {}
@@ -410,8 +395,16 @@ impl<'t> Renderer<'t> {
         self.open.last().map_or(self.theme.text, |o| o.style)
     }
 
-    fn code_style(&self) -> Style {
-        self.style().patch(self.theme.code)
+    /// The style of inline code, patched with the theme's style for
+    /// `classes`, which only kramdown gives it.
+    #[cfg_attr(not(feature = "kramdown"), allow(unused_variables))]
+    fn code_style(&self, classes: &[CowStr<'_>]) -> Style {
+        let style = self.style().patch(self.theme.code);
+        #[cfg(feature = "kramdown")]
+        if let Some(class) = self.theme.class_style(classes.iter().map(|c| c.as_ref())) {
+            return style.patch(class);
+        }
+        style
     }
 
     /// The style of a code block here, with the background of the classes
@@ -469,21 +462,21 @@ impl<'t> Renderer<'t> {
         }
     }
 
-    fn is_open(&self, kind: impl Fn(&Kind) -> bool) -> bool {
-        self.open.iter().any(|o| kind(&o.kind))
+    fn is_open(&self, kind: &Kind) -> bool {
+        self.open.iter().any(|o| o.kind.is_like(kind))
     }
 
-    /// Closes the innermost open element of `kind`, and anything left open
-    /// inside it, like unclosed HTML.
-    fn close(&mut self, kind: impl Fn(&Kind) -> bool) {
-        if !self.is_open(&kind) {
+    /// Closes the innermost open element like `kind`, and anything left
+    /// open inside it, like unclosed HTML.
+    fn close(&mut self, kind: &Kind) {
+        if !self.is_open(kind) {
             return;
         }
         while let Some(open) = self.open.pop() {
             if open.prefixed {
                 self.writer.pop_prefix();
             }
-            if kind(&open.kind) {
+            if open.kind.is_like(kind) {
                 return;
             }
         }
@@ -502,7 +495,6 @@ struct Open {
 }
 
 /// What an open element is, so its end closes the right one.
-#[derive(PartialEq)]
 enum Kind {
     /// Inline formatting, like emphasis.
     Style,
@@ -529,6 +521,35 @@ enum Kind {
     },
 }
 
+impl Kind {
+    /// Whether this is the same kind of element as `other`: any list, or
+    /// HTML of the same tag name.
+    fn is_like(&self, other: &Kind) -> bool {
+        match (self, other) {
+            #[cfg(feature = "html")]
+            (Kind::Html(a), Kind::Html(b)) => a == b,
+            #[cfg(feature = "html")]
+            (Kind::Class { name: a, .. }, Kind::Class { name: b, .. }) => a == b,
+            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+        }
+    }
+}
+
+impl Capture {
+    /// Whether `end` ends this content. A `<pre>` ends at its closing tag
+    /// instead, read from the HTML.
+    fn ends_at(&self, end: &TagEnd) -> bool {
+        match self {
+            Capture::Code { .. } => *end == TagEnd::CodeBlock,
+            Capture::Image { .. } => *end == TagEnd::Image,
+            #[cfg(feature = "html")]
+            Capture::HtmlBlock(_) => *end == TagEnd::HtmlBlock,
+            #[cfg(feature = "html")]
+            Capture::Pre(_) => false,
+        }
+    }
+}
+
 /// Content read whole before it's drawn, swallowing the events inside it.
 enum Capture {
     Code {
@@ -544,15 +565,4 @@ enum Capture {
     /// The text of an HTML `<pre>`, kept as is until it closes.
     #[cfg(feature = "html")]
     Pre(String),
-}
-
-fn heading_index(level: HeadingLevel) -> usize {
-    match level {
-        HeadingLevel::H1 => 0,
-        HeadingLevel::H2 => 1,
-        HeadingLevel::H3 => 2,
-        HeadingLevel::H4 => 3,
-        HeadingLevel::H5 => 4,
-        HeadingLevel::H6 => 5,
-    }
 }
