@@ -117,8 +117,8 @@ pub struct Link {
 }
 
 /// A code block too wide for the page. Its lines are cut off at the page's
-/// edge, with a `›` in the padding where there's more, and can be drawn
-/// shifted sideways to show the rest.
+/// edge, with a `›` where there's more, and can be drawn shifted sideways to
+/// show the rest.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Overflow {
     /// Which of the document's code blocks this is, counting from 0, the
@@ -126,14 +126,16 @@ pub struct Overflow {
     pub block: usize,
     /// The lines the block is drawn on.
     pub lines: Range<usize>,
-    /// The column the block starts at, including its padding.
+    /// The column the block starts at, including its padding, if any.
     pub x: u16,
-    /// How many columns of code show, between a column of padding on
-    /// either side.
+    /// How many columns the code gets, not counting the padding.
     pub width: u16,
     /// The code, line by line, uncut.
     code: Vec<Line<'static>>,
     style: Style,
+    /// Whether there's a column of padding on either side, from
+    /// [`Theme::code_block_padding`].
+    padded: bool,
 }
 
 impl Overflow {
@@ -143,15 +145,35 @@ impl Overflow {
         widest.saturating_sub(usize::from(self.width))
     }
 
+    /// The columns the block is drawn across, padding included.
+    pub(crate) fn columns(&self) -> Range<u16> {
+        self.x..self.x + self.width + if self.padded { 2 } else { 0 }
+    }
+
     /// The block's `i`th line with its padding, shifted `shift` columns to
     /// the left, `‹` and `›` showing where code is out of sight.
     pub fn row(&self, i: usize, shift: usize) -> Line<'static> {
         let shift = shift.min(self.max_shift());
         let width = usize::from(self.width);
         let code = &self.code[i];
+        let after = code.width() > shift + width;
+        // Unpadded, the marks take the code's first and last columns, so
+        // leave the code at least one.
+        let before = shift > 0 && code.width() > 0 && (self.padded || width > usize::from(after));
+        let (start, end) = if self.padded {
+            (shift, shift + width)
+        } else {
+            (
+                shift + usize::from(before),
+                shift + width - usize::from(after),
+            )
+        };
         let marker =
             |more: bool, c: &'static str| Span::styled(if more { c } else { " " }, self.style);
-        let mut spans = vec![marker(shift > 0 && code.width() > 0, "‹")];
+        let mut spans = Vec::new();
+        if self.padded || before {
+            spans.push(marker(before, "‹"));
+        }
         let mut x = 0;
         for span in &code.spans {
             let mut text = String::new();
@@ -159,12 +181,12 @@ impl Overflow {
                 let w = c.width().unwrap_or(0);
                 let (from, to) = (x, x + w);
                 x = to;
-                if to <= shift || from >= shift + width {
+                if to <= start || from >= end {
                     continue;
                 }
                 // A wide character cut by either edge shows as spaces.
-                if from < shift || to > shift + width {
-                    let shown = to.min(shift + width) - from.max(shift);
+                if from < start || to > end {
+                    let shown = to.min(end) - from.max(start);
                     text.push_str(&" ".repeat(shown));
                 } else {
                     text.push(c);
@@ -174,9 +196,11 @@ impl Overflow {
                 spans.push(Span::styled(text, self.style.patch(span.style)));
             }
         }
-        let used = x.saturating_sub(shift).min(width);
-        spans.push(Span::styled(" ".repeat(width - used), self.style));
-        spans.push(marker(x > shift + width, "›"));
+        let used = x.clamp(start, end) - start;
+        spans.push(Span::styled(" ".repeat(end - start - used), self.style));
+        if self.padded || after {
+            spans.push(marker(after, "›"));
+        }
         Line::from(spans)
     }
 }

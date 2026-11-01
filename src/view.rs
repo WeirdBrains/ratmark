@@ -141,7 +141,7 @@ impl MarkdownState {
         let (x, line) = (x - area.x, self.scroll + usize::from(y - area.y));
         let block = self
             .visible_overflows()
-            .find(|o| o.lines.contains(&line) && (o.x..o.x + o.width + 2).contains(&x))
+            .find(|o| o.lines.contains(&line) && o.columns().contains(&x))
             .map(|o| (o.block, o.max_shift()));
         block.is_some_and(|(block, max)| self.shift_block(block, max, columns))
     }

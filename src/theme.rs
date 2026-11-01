@@ -20,6 +20,10 @@ pub struct Theme {
     pub code: Style,
     /// Fenced and indented code. The background fills the block's width.
     pub code_block: Style,
+    /// Leave a column on either side of each code block, where `‹` and `›`
+    /// show code cut off at the edges. Without it the code takes the full
+    /// width, and the marks are drawn over its first and last columns.
+    pub code_block_padding: bool,
     pub quote: Style,
     /// The bar down the side of a block quote.
     pub quote_marker: Style,
@@ -105,6 +109,7 @@ impl Theme {
             image: Style::new().fg(PINK),
             code: Style::new().fg(BURNT).bg(BG2),
             code_block: Style::new().fg(FG).bg(BG2),
+            code_block_padding: true,
             quote: Style::new().fg(ORANGE),
             quote_marker: Style::new().fg(GRAY),
             list_marker: Style::new().fg(TEAL),
@@ -143,6 +148,7 @@ impl Theme {
             image: Style::new().add_modifier(Modifier::UNDERLINED),
             code: Style::new().add_modifier(Modifier::REVERSED),
             code_block: Style::new(),
+            code_block_padding: true,
             quote: Style::new().add_modifier(Modifier::ITALIC),
             quote_marker: dim,
             list_marker: Style::new(),

@@ -115,6 +115,32 @@ fn wide_code_blocks_shift_sideways() {
     assert_eq!(row(1, 2), "‹     ");
 }
 
+fn unpadded() -> Theme {
+    Theme {
+        code_block_padding: false,
+        ..Theme::default()
+    }
+}
+
+#[test]
+fn code_blocks_can_go_without_padding() {
+    let rendered = Rendered::render("```\nabcdefgh\nab\n```", 6, &unpadded());
+    let out: Vec<String> = rendered.lines.iter().map(|l| l.to_string()).collect();
+    assert_eq!(out, ["abcde›", "ab    "]);
+}
+
+#[test]
+fn unpadded_code_blocks_mark_cut_code_over_it() {
+    let rendered = Rendered::render("> ```\n> abcdefgh\n> ab\n> ```", 8, &unpadded());
+    let block = &rendered.overflows[0];
+    assert_eq!((block.x, block.width), (2, 6));
+    assert_eq!(block.max_shift(), 2);
+    let row = |i, shift| block.row(i, shift).to_string();
+    assert_eq!(row(0, 1), "‹cdef›");
+    assert_eq!(row(0, 2), "‹defgh");
+    assert_eq!(row(1, 1), "‹     ");
+}
+
 #[test]
 fn links_record_where_they_land() {
     let rendered = Rendered::render("go [over there](/x) now", 10, &Theme::default());

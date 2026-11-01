@@ -364,15 +364,18 @@ impl<'t> Renderer<'t> {
             .map(|line| Line::from_iter(line.into_iter().map(|p| Span::styled(p.text, p.style))))
             .collect();
         self.writer.pay_gap();
+        let padded = self.theme.code_block_padding;
+        // A column of padding on each side, when the theme wants it.
+        let padding = if padded { 2 } else { 0 };
         let first = self.writer.next_block_line();
         let block = Overflow {
             block: self.code_blocks,
             lines: first..first + code.len(),
             x: self.writer.indent() as u16,
-            // One column of padding on each side.
-            width: self.writer.available().saturating_sub(2).max(1) as u16,
+            width: self.writer.available().saturating_sub(padding).max(1) as u16,
             code,
             style: base,
+            padded,
         };
         for i in 0..block.code.len() {
             let row = block.row(i, 0);
