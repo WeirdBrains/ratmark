@@ -2,7 +2,6 @@
 
 use pulldown_cmark::{CodeBlockKind, CowStr, Event, HeadingLevel, Options, Tag, TagEnd};
 use ratatui_core::style::Style;
-use ratatui_core::text::{Line, Span};
 
 use crate::table::Table;
 use crate::wrap::{Inline, Piece};
@@ -346,13 +345,9 @@ impl<'t> Renderer<'t> {
         let base = self.code_block_style();
         let plain = || code.lines().map(|l| vec![Piece::new(l, base)]).collect();
         #[cfg(feature = "syntax")]
-        let lines = crate::syntax::highlight(&code, lang, self.theme, base).unwrap_or_else(plain);
+        let code = crate::syntax::highlight(&code, lang, self.theme, base).unwrap_or_else(plain);
         #[cfg(not(feature = "syntax"))]
-        let lines: Vec<Vec<Piece>> = plain();
-        let code: Vec<Line<'static>> = lines
-            .into_iter()
-            .map(|line| Line::from_iter(line.into_iter().map(|p| Span::styled(p.text, p.style))))
-            .collect();
+        let code: Vec<Vec<Piece>> = plain();
         self.writer.pay_gap();
         let padded = self.theme.code_block_padding;
         // A column of padding on each side, when the theme wants it.
@@ -368,12 +363,7 @@ impl<'t> Renderer<'t> {
             padded,
         };
         for i in 0..block.code.len() {
-            let row = block.row(i, 0);
-            let pieces = row
-                .spans
-                .into_iter()
-                .map(|s| Piece::new(s.content, s.style));
-            self.writer.emit(pieces.collect());
+            self.writer.emit(block.pieces(i, 0));
         }
         self.code_blocks += 1;
         if block.max_shift() > 0 {

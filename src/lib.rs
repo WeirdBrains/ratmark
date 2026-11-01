@@ -125,11 +125,9 @@
 //! [Ratatui]: https://ratatui.rs
 //! [`StatefulWidget`]: ratatui_core::widgets::StatefulWidget
 
-use std::ops::Range;
+use ratatui_core::text::{Line, Text};
 
-use ratatui_core::style::Style;
-use ratatui_core::text::{Line, Span, Text};
-
+mod overflow;
 mod render;
 mod table;
 mod theme;
@@ -142,8 +140,7 @@ pub mod front_matter;
 #[cfg(feature = "syntax")]
 mod syntax;
 
-use crate::wrap::Piece;
-
+pub use overflow::Overflow;
 pub use theme::Theme;
 pub use view::{MarkdownState, MarkdownView};
 
@@ -204,86 +201,6 @@ pub struct Link {
     /// Where the link's text landed. A link that wraps has one region per
     /// line.
     pub regions: Vec<Region>,
-}
-
-/// A code block too wide for the page. Its lines are cut off at the page's
-/// edge, with a `›` where there's more, and can be drawn shifted sideways to
-/// show the rest.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Overflow {
-    /// Which of the document's code blocks this is, counting from 0, the
-    /// same at any width.
-    pub block: usize,
-    /// The lines the block is drawn on.
-    pub lines: Range<usize>,
-    /// The column the block starts at, including its padding, if any.
-    pub x: u16,
-    /// How many columns the code gets, not counting the padding.
-    pub width: u16,
-    /// The code, line by line, uncut.
-    code: Vec<Line<'static>>,
-    style: Style,
-    /// Whether there's a column of padding on either side, from
-    /// [`Theme::code_block_padding`].
-    padded: bool,
-}
-
-impl Overflow {
-    /// How far the block can be shifted before its widest line runs out.
-    pub fn max_shift(&self) -> usize {
-        let widest = self.code.iter().map(Line::width).max().unwrap_or(0);
-        widest.saturating_sub(usize::from(self.width))
-    }
-
-    /// The columns the block is drawn across, padding included.
-    pub(crate) fn columns(&self) -> Range<u16> {
-        self.x..self.x + self.width + if self.padded { 2 } else { 0 }
-    }
-
-    /// The block's `i`th line with its padding, shifted `shift` columns to
-    /// the left, `‹` and `›` showing where code is out of sight.
-    pub fn row(&self, i: usize, shift: usize) -> Line<'static> {
-        let shift = shift.min(self.max_shift());
-        let width = usize::from(self.width);
-        let code = &self.code[i];
-        let after = code.width() > shift + width;
-        // Unpadded, the marks take the code's first and last columns, so
-        // leave the code at least one.
-        let before = shift > 0 && code.width() > 0 && (self.padded || width > usize::from(after));
-        let (start, end) = if self.padded {
-            (shift, shift + width)
-        } else {
-            (
-                shift + usize::from(before),
-                shift + width - usize::from(after),
-            )
-        };
-        let marker =
-            |more: bool, c: &'static str| Span::styled(if more { c } else { " " }, self.style);
-        let mut spans = Vec::new();
-        if self.padded || before {
-            spans.push(marker(before, "‹"));
-        }
-        let mut x = 0;
-        for span in &code.spans {
-            let piece = Piece::new(span.content.as_ref(), span.style);
-            let from = x;
-            x += piece.width();
-            if x <= start || from >= end {
-                continue;
-            }
-            let shown = piece.cut(start.saturating_sub(from)..end - from);
-            if !shown.text.is_empty() {
-                spans.push(Span::styled(shown.text, self.style.patch(span.style)));
-            }
-        }
-        let used = x.clamp(start, end) - start;
-        spans.push(Span::styled(" ".repeat(end - start - used), self.style));
-        if self.padded || after {
-            spans.push(marker(after, "›"));
-        }
-        Line::from(spans)
-    }
 }
 
 /// A stretch of one line, in columns from the start of the line.
