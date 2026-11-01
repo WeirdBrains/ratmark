@@ -27,7 +27,7 @@ front-matter-toml = ["_front-matter", "dep:toml"]
 _front-matter = ["dep:serde"]
 # Understand Markdown written for kramdown, like Jekyll sites, read with
 # pulldown-kram.
-kramdown = ["dep:pulldown-kram"]
+kramdown = ["dep:pulldown-kram", "pulldown-kram/toc"]
 # Mark links in MarkdownView's cells, so backends that support it draw real
 # links, like OSC 8 in a terminal. Needs Ratatui's cell extensions, which
 # aren't released yet, see ratatui/ratatui#2854. Links are made absolute
