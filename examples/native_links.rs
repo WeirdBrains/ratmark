@@ -6,8 +6,8 @@
 //!     cargo run --example native_links --features native-links
 //!
 //! The feature needs Ratatui's cell extensions, which aren't released yet
-//! (ratatui/ratatui#2854), so an app using it has to patch in the same
-//! ratatui-core as this crate's Cargo.toml, and a backend from it with the
+//! (ratatui/ratatui#2854), so this crate uses ratatui-core from that branch,
+//! and an app using it needs a backend from the same branch with the
 //! `cell-extensions` feature, like ratatui-crossterm here.
 
 mod common;

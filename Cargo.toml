@@ -37,7 +37,8 @@ html = ["dep:html5gum"]
 
 [dependencies]
 pulldown-cmark = { version = "0.13", default-features = false }
-ratatui-core = "0.1"
+# Ratatui's cell extensions, proposed in ratatui/ratatui#2854.
+ratatui-core = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
 unicode-width = "0.2"
 syntect = { version = "5.3", optional = true, default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
 html5gum = { version = "0.9", optional = true }
@@ -48,7 +49,7 @@ toml = { version = "1.1", optional = true, default-features = false, features = 
 
 [dev-dependencies]
 # Draws the examples. Its cell extensions write native links as OSC 8.
-ratatui-crossterm = { version = "0.1", features = ["cell-extensions"] }
+ratatui-crossterm = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells", features = ["cell-extensions"] }
 serde = { version = "1", features = ["derive"] }
 unicode-width = "0.2"
 
@@ -71,8 +72,3 @@ required-features = ["html"]
 [[example]]
 name = "native_links"
 required-features = ["native-links"]
-
-# Ratatui's cell extensions, proposed in ratatui/ratatui#2854.
-[patch.crates-io]
-ratatui-core = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
-ratatui-crossterm = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
