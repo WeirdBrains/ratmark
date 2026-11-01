@@ -29,8 +29,7 @@
 //! The `kramdown` feature, also off by default, understands a few habits of
 //! Markdown written for kramdown, Jekyll's default: attribute lists like
 //! `{:.no_toc}` are dropped, `{:toc}` lists become tables of contents, and
-//! Markdown inside `markdown="1"` elements is rendered as Markdown. See
-//! [`kramdown`].
+//! Markdown inside `markdown="1"` elements is rendered as Markdown.
 //!
 //! The `links` feature, off by default, writes each link's URL into the
 //! cells [`MarkdownView`] draws, so backends that support it show links the
@@ -44,18 +43,19 @@ use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span, Text};
 use unicode_width::UnicodeWidthChar;
 
-#[cfg(feature = "_front-matter")]
-pub mod front_matter;
-#[cfg(feature = "kramdown")]
-pub mod kramdown;
 mod render;
-#[cfg(feature = "syntax")]
-mod syntax;
 mod table;
 mod theme;
 mod view;
 mod wrap;
 mod writer;
+
+#[cfg(feature = "_front-matter")]
+pub mod front_matter;
+#[cfg(feature = "kramdown")]
+mod kramdown;
+#[cfg(feature = "syntax")]
+mod syntax;
 
 pub use theme::Theme;
 pub use view::{MarkdownState, MarkdownView};
