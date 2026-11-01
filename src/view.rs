@@ -1,11 +1,11 @@
 //! A scrolling document view, with links that can be focused and clicked.
 
 use ratatui_core::buffer::Buffer;
-use ratatui_core::layout::Rect;
+use ratatui_core::layout::{Position, Rect};
 use ratatui_core::style::{Modifier, Style};
 use ratatui_core::widgets::StatefulWidget;
 
-use crate::{Link, Overflow, Region, Rendered, Theme};
+use crate::{Heading, Link, Overflow, Region, Rendered, Theme};
 
 /// Draws a [`MarkdownState`]'s document, laid out to fit the area it's
 /// given, scrolled and with its focused link highlighted.
@@ -43,6 +43,86 @@ impl<'t> MarkdownView<'t> {
     pub fn focus_style(mut self, style: Style) -> Self {
         self.focus = style;
         self
+    }
+}
+
+impl StatefulWidget for MarkdownView<'_> {
+    type State = MarkdownState;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut MarkdownState) {
+        state.lay_out(area, self.theme);
+        let Some((_, rendered)) = &state.rendered else {
+            return;
+        };
+        self.draw_lines(rendered, state, area, buf);
+        self.draw_shifted_code(state, area, buf);
+        #[cfg(feature = "links")]
+        self.draw_links(rendered, state, area, buf);
+        if let Some(link) = state.focused() {
+            for rect in link
+                .regions
+                .iter()
+                .filter_map(|r| r.on_screen(state.scroll, area))
+            {
+                buf.set_style(rect, self.focus);
+            }
+        }
+    }
+}
+
+impl MarkdownView<'_> {
+    /// Draws the lines on screen, as laid out.
+    fn draw_lines(&self, rendered: &Rendered, state: &MarkdownState, area: Rect, buf: &mut Buffer) {
+        let lines = rendered
+            .lines
+            .iter()
+            .skip(state.scroll)
+            .take(usize::from(area.height));
+        for (y, line) in (area.y..).zip(lines) {
+            buf.set_line(area.x, y, line, area.width);
+        }
+    }
+
+    /// Draws the wide code blocks shifted sideways over their lines.
+    fn draw_shifted_code(&self, state: &MarkdownState, area: Rect, buf: &mut Buffer) {
+        for overflow in state.visible_overflows() {
+            let shift = state.shift(overflow.block);
+            if shift == 0 {
+                continue;
+            }
+            let x = area.x + overflow.x;
+            let width = area.right().saturating_sub(x);
+            for line in overflow.lines.clone() {
+                let Some(row) = line
+                    .checked_sub(state.scroll)
+                    .filter(|r| *r < usize::from(area.height))
+                else {
+                    continue;
+                };
+                let shifted = overflow.row(line - overflow.lines.start, shift);
+                buf.set_line(x, area.y + row as u16, &shifted, width);
+            }
+        }
+    }
+
+    /// Marks the cells of each link with where it goes, for backends that
+    /// draw real links.
+    #[cfg(feature = "links")]
+    fn draw_links(&self, rendered: &Rendered, state: &MarkdownState, area: Rect, buf: &mut Buffer) {
+        for (i, link) in rendered.links.iter().enumerate() {
+            // One id per link, so a terminal treats the pieces of a wrapped
+            // link as one.
+            let url = state.absolute(&link.url);
+            let hyperlink =
+                ratatui_core::buffer::Hyperlink::new(&url).with_id(format!("ratmark-{i}"));
+            for rect in link
+                .regions
+                .iter()
+                .filter_map(|r| r.on_screen(state.scroll, area))
+            {
+                buf.set_hyperlink(rect, Some(&hyperlink));
+            }
+        }
     }
 }
 
@@ -112,17 +192,33 @@ impl MarkdownState {
         self.scroll != was
     }
 
+    /// Scrolls by `pages` screenfuls, less a couple of lines each for
+    /// context, down when positive. Returns whether it moved, which it
+    /// doesn't at either end.
+    pub fn page_by(&mut self, pages: isize) -> bool {
+        let page = (self.area.height as isize - 2).max(1);
+        self.scroll_by(pages * page)
+    }
+
+    /// Scrolls to the heading a `#section` link points at, now or once the
+    /// document is laid out. Matching ignores case and punctuation, since
+    /// tools make heading ids a little differently.
+    pub fn scroll_to_anchor(&mut self, anchor: &str) {
+        self.anchor = Some(anchor.to_owned());
+        self.apply_anchor();
+    }
+
     /// How far the `block`th code block is shifted to the left, in columns.
     pub fn shift(&self, block: usize) -> usize {
         self.shifts.get(block).copied().unwrap_or(0)
     }
 
-    // TODO: Let tab focus wide code blocks along with links, and shift the
-    // focused one.
     /// Shifts the topmost wide code block on screen by `columns`, to the
     /// left when positive, as far as its widest line allows.
     /// Returns whether it moved, which it doesn't at its end.
     pub fn shift_by(&mut self, columns: isize) -> bool {
+        // TODO: Let tab focus wide code blocks along with links, and shift
+        // the focused one.
         let block = self
             .visible_overflows()
             .next()
@@ -134,16 +230,64 @@ impl MarkdownState {
     /// `columns`, if there is one there. Returns whether it moved, which it
     /// doesn't when there's none or it's at its end.
     pub fn shift_at(&mut self, x: u16, y: u16, columns: isize) -> bool {
-        let area = self.area;
-        if x < area.x || y < area.y || x >= area.right() || y >= area.bottom() {
+        let Some((line, x)) = self.document_position(x, y) else {
             return false;
-        }
-        let (x, line) = (x - area.x, self.scroll + usize::from(y - area.y));
+        };
         let block = self
             .visible_overflows()
             .find(|o| o.lines.contains(&line) && o.columns().contains(&x))
             .map(|o| (o.block, o.max_shift()));
         block.is_some_and(|(block, max)| self.shift_block(block, max, columns))
+    }
+
+    /// The focused link.
+    pub fn focused(&self) -> Option<&Link> {
+        self.rendered()?.links.get(self.focus?)
+    }
+
+    /// Focuses the next link, starting from the top of the screen, and
+    /// scrolls to it.
+    pub fn focus_next(&mut self) {
+        self.move_focus(true);
+    }
+
+    /// Focuses the previous link, starting from the bottom of the screen,
+    /// and scrolls to it.
+    pub fn focus_prev(&mut self) {
+        self.move_focus(false);
+    }
+
+    /// Focuses no link.
+    pub fn clear_focus(&mut self) {
+        self.focus = None;
+    }
+
+    /// The link drawn at screen position `x`, `y`, if any.
+    pub fn link_at(&self, x: u16, y: u16) -> Option<&Link> {
+        let (line, x) = self.document_position(x, y)?;
+        self.rendered()?.link_at(line, x)
+    }
+
+    /// Lays the document out for `area`, if it isn't already for its
+    /// width, and keeps the scroll inside it.
+    fn lay_out(&mut self, area: Rect, theme: &Theme) {
+        self.area = area;
+        if self.rendered.as_ref().is_none_or(|(w, _)| *w != area.width) {
+            // Links come out in the same order at any width, so the focus
+            // stays put through a resize.
+            let rendered = Rendered::render(&self.markdown, area.width, theme);
+            self.rendered = Some((area.width, rendered));
+        }
+        self.apply_anchor();
+        self.clamp();
+    }
+
+    /// The document's line and column at screen position `x`, `y`, if it's
+    /// in the view.
+    fn document_position(&self, x: u16, y: u16) -> Option<(usize, u16)> {
+        let area = self.area;
+        area.contains(Position::new(x, y))
+            .then(|| (self.scroll + usize::from(y - area.y), x - area.x))
     }
 
     fn shift_block(&mut self, block: usize, max: usize, columns: isize) -> bool {
@@ -165,20 +309,6 @@ impl MarkdownState {
             .filter(move |o| o.lines.start < screen.end && screen.start < o.lines.end)
     }
 
-    /// Scrolls by a screenful, less a couple of lines for context.
-    pub fn page(&mut self, down: bool) {
-        let lines = (self.area.height as isize - 2).max(1);
-        self.scroll_by(if down { lines } else { -lines });
-    }
-
-    /// Scrolls to the heading a `#section` link points at, now or once the
-    /// document is laid out. Matching ignores case and punctuation, since
-    /// tools make heading ids a little differently.
-    pub fn scroll_to_anchor(&mut self, anchor: &str) {
-        self.anchor = Some(anchor.to_owned());
-        self.apply_anchor();
-    }
-
     /// How far down the document can scroll.
     fn max_scroll(&self) -> usize {
         let lines = self.rendered().map_or(0, |r| r.lines.len());
@@ -198,34 +328,9 @@ impl MarkdownState {
         let Some(anchor) = self.anchor.take() else {
             return;
         };
-        if let Some(h) = rendered
-            .headings
-            .iter()
-            .find(|h| anchor_matches(&h.text, &anchor))
-        {
-            self.scroll_to(h.line);
+        if let Some(heading) = rendered.headings.iter().find(|h| h.matches_anchor(&anchor)) {
+            self.scroll_to(heading.line);
         }
-    }
-
-    /// The focused link.
-    pub fn focused(&self) -> Option<&Link> {
-        self.rendered()?.links.get(self.focus?)
-    }
-
-    /// Focuses the next link, starting from the top of the screen, and
-    /// scrolls to it.
-    pub fn focus_next(&mut self) {
-        self.move_focus(true);
-    }
-
-    /// Focuses the previous link, starting from the bottom of the screen,
-    /// and scrolls to it.
-    pub fn focus_prev(&mut self) {
-        self.move_focus(false);
-    }
-
-    pub fn clear_focus(&mut self) {
-        self.focus = None;
     }
 
     fn move_focus(&mut self, forward: bool) {
@@ -278,124 +383,48 @@ impl MarkdownState {
         }
     }
 
-    /// The link drawn at screen position `x`, `y`, if any.
-    pub fn link_at(&self, x: u16, y: u16) -> Option<&Link> {
-        let area = self.area;
-        if x < area.x || y < area.y || x >= area.right() || y >= area.bottom() {
-            return None;
+    /// `url` resolved against the document's own address, if it has one. A
+    /// link that can't be resolved is left as written.
+    #[cfg(feature = "links")]
+    fn absolute(&self, url: &str) -> String {
+        match &self.base {
+            Some(base) => base.join(url).map_or_else(|_| url.to_owned(), String::from),
+            None => url.to_owned(),
         }
-        let line = self.scroll + usize::from(y - area.y);
-        self.rendered()?.link_at(line, x - area.x)
     }
 }
 
-impl StatefulWidget for MarkdownView<'_> {
-    type State = MarkdownState;
+impl Region {
+    /// Where the region is on screen in `area`, scrolled to `scroll`, if it's
+    /// in view.
+    fn on_screen(&self, scroll: usize, area: Rect) -> Option<Rect> {
+        let row = self
+            .line
+            .checked_sub(scroll)
+            .filter(|r| *r < usize::from(area.height))?;
+        let end = self.end.min(area.width);
+        let start = self.start.min(end);
+        Some(Rect::new(
+            area.x + start,
+            area.y + row as u16,
+            end - start,
+            1,
+        ))
+    }
+}
 
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut MarkdownState) {
-        state.area = area;
-        if state
-            .rendered
-            .as_ref()
-            .is_none_or(|(w, _)| *w != area.width)
-        {
-            // Links come out in the same order at any width, so the focus
-            // stays put through a resize.
-            state.rendered = Some((
-                area.width,
-                Rendered::render(&state.markdown, area.width, self.theme),
-            ));
-        }
-        state.apply_anchor();
-        state.clamp();
-
-        let Some((_, rendered)) = &state.rendered else {
-            return;
+impl Heading {
+    /// Whether a `#section` link loosely names this heading.
+    fn matches_anchor(&self, anchor: &str) -> bool {
+        let simplify = |s: &str| -> String {
+            s.chars()
+                .filter(|c| c.is_alphanumeric())
+                .flat_map(char::to_lowercase)
+                .collect()
         };
-        let height = usize::from(area.height);
-        for (i, line) in rendered
-            .lines
-            .iter()
-            .skip(state.scroll)
-            .take(height)
-            .enumerate()
-        {
-            buf.set_line(area.x, area.y + i as u16, line, area.width);
-        }
-        for overflow in state.visible_overflows() {
-            let shift = state.shift(overflow.block);
-            if shift > 0 {
-                let x = area.x + overflow.x;
-                let width = area.right().saturating_sub(x);
-                for line in overflow.lines.clone() {
-                    let Some(row) = line.checked_sub(state.scroll).filter(|r| *r < height) else {
-                        continue;
-                    };
-                    let shifted = overflow.row(line - overflow.lines.start, shift);
-                    buf.set_line(x, area.y + row as u16, &shifted, width);
-                }
-            }
-        }
-        #[cfg(feature = "links")]
-        for (i, link) in rendered.links.iter().enumerate() {
-            // One id per link, so a terminal treats the pieces of a wrapped
-            // link as one.
-            let url = match &state.base {
-                Some(base) => absolute(base, &link.url),
-                None => link.url.clone(),
-            };
-            let hyperlink =
-                ratatui_core::buffer::Hyperlink::new(&url).with_id(format!("ratmark-{i}"));
-            for region in &link.regions {
-                if let Some(rect) = region_rect(region, state.scroll, area) {
-                    buf.set_hyperlink(rect, Some(&hyperlink));
-                }
-            }
-        }
-        if let Some(link) = state.focus.and_then(|i| rendered.links.get(i)) {
-            for region in &link.regions {
-                if let Some(rect) = region_rect(region, state.scroll, area) {
-                    buf.set_style(rect, self.focus);
-                }
-            }
-        }
+        let anchor = simplify(anchor);
+        !anchor.is_empty() && simplify(&self.text) == anchor
     }
-}
-
-/// Where a link's region is on screen, if it's scrolled into view.
-fn region_rect(region: &Region, scroll: usize, area: Rect) -> Option<Rect> {
-    let row = region
-        .line
-        .checked_sub(scroll)
-        .filter(|r| *r < usize::from(area.height))?;
-    let end = region.end.min(area.width);
-    let start = region.start.min(end);
-    Some(Rect::new(
-        area.x + start,
-        area.y + row as u16,
-        end - start,
-        1,
-    ))
-}
-
-/// Resolves `url` against `base`, the address of the page it's on. A link
-/// that can't be resolved is left as written.
-#[cfg(feature = "links")]
-fn absolute(base: &url::Url, url: &str) -> String {
-    base.join(url).map_or_else(|_| url.to_owned(), String::from)
-}
-
-/// Loosely matches a heading to a `#section` link.
-fn anchor_matches(heading: &str, anchor: &str) -> bool {
-    let simplify = |s: &str| -> String {
-        s.chars()
-            .filter(|c| c.is_alphanumeric())
-            .flat_map(char::to_lowercase)
-            .collect()
-    };
-    let heading = simplify(heading);
-    let anchor = simplify(anchor);
-    !anchor.is_empty() && heading == anchor
 }
 
 #[cfg(test)]
@@ -427,6 +456,11 @@ mod tests {
         let buf = draw(&mut state, 10, 2);
         assert_eq!((row(&buf, 0), row(&buf, 1)), ("".into(), "c".into()));
         state.scroll_by(-100);
+        assert_eq!(state.scroll(), 0);
+        // Two lines high, a page keeps none for context, but still moves.
+        assert!(state.page_by(2));
+        assert_eq!(state.scroll(), 2);
+        assert!(state.page_by(-5));
         assert_eq!(state.scroll(), 0);
     }
 
@@ -472,15 +506,15 @@ mod tests {
     #[test]
     fn absolute_links() {
         let base = "https://a.com/x/page";
-        let url = url::Url::parse(base).unwrap();
-        assert_eq!(absolute(&url, "/root"), "https://a.com/root");
-        assert_eq!(absolute(&url, "sib"), "https://a.com/x/sib");
-        assert_eq!(absolute(&url, "../up"), "https://a.com/up");
-        assert_eq!(absolute(&url, "#s"), "https://a.com/x/page#s");
-        assert_eq!(absolute(&url, "//c.com/y"), "https://c.com/y");
-        assert_eq!(absolute(&url, "mailto:a@b.c"), "mailto:a@b.c");
-        let root = url::Url::parse("https://a.com").unwrap();
-        assert_eq!(absolute(&root, "p"), "https://a.com/p");
+        let state = MarkdownState::new("").with_link_base(base);
+        assert_eq!(state.absolute("/root"), "https://a.com/root");
+        assert_eq!(state.absolute("sib"), "https://a.com/x/sib");
+        assert_eq!(state.absolute("../up"), "https://a.com/up");
+        assert_eq!(state.absolute("#s"), "https://a.com/x/page#s");
+        assert_eq!(state.absolute("//c.com/y"), "https://c.com/y");
+        assert_eq!(state.absolute("mailto:a@b.c"), "mailto:a@b.c");
+        let root = MarkdownState::new("").with_link_base("https://a.com");
+        assert_eq!(root.absolute("p"), "https://a.com/p");
         let mut state = MarkdownState::new("[x](y)").with_link_base(base);
         let buf = draw(&mut state, 10, 1);
         assert_eq!(
