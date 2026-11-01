@@ -8,6 +8,7 @@ use super::{BULLETS, Capture, Kind, Open, Renderer};
 use crate::wrap::Piece;
 use crate::writer::Prefix;
 
+/// Text or a tag, read from HTML.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Token {
     Text(String),
@@ -19,6 +20,52 @@ pub(crate) enum Token {
 }
 
 impl Token {
+    /// Splits HTML into text and tags. Comments are dropped, along with the
+    /// content of [`SKIPPED`] elements, though their opening tag is still
+    /// returned so its attributes can be used.
+    pub fn parse(html: &str) -> Vec<Self> {
+        let mut emitter = DefaultEmitter::default();
+        // Read the insides of elements like `<script>` as text, like a browser.
+        emitter.naively_switch_states(true);
+        let mut tokens: Vec<Self> = Vec::new();
+        let mut skipping: Option<String> = None;
+        for token in Tokenizer::new_with_emitter(html, emitter).flatten() {
+            match token {
+                Html::StartTag(tag) if skipping.is_none() => {
+                    let name = string(&tag.name);
+                    if SKIPPED.contains(&name.as_str()) && !tag.self_closing {
+                        skipping = Some(name.clone());
+                    }
+                    let attrs = tag
+                        .attributes
+                        .iter()
+                        .map(|(k, v)| (string(k), string(v)))
+                        .collect();
+                    tokens.push(Token::Open { name, attrs });
+                }
+                Html::EndTag(tag) => {
+                    let name = string(&tag.name);
+                    if skipping.is_none() {
+                        tokens.push(Token::Close(name));
+                    } else if skipping.as_ref() == Some(&name) {
+                        skipping = None;
+                    }
+                }
+                Html::String(text) if skipping.is_none() => {
+                    // The tokenizer can hand text over in pieces.
+                    if let Some(Token::Text(last)) = tokens.last_mut() {
+                        last.push_str(&string(&text));
+                    } else {
+                        tokens.push(Token::Text(string(&text)));
+                    }
+                }
+                _ => {}
+            }
+        }
+        tokens
+    }
+
+    /// The value of an opening tag's attribute `key`.
     pub fn attr(&self, key: &str) -> Option<&str> {
         match self {
             Token::Open { attrs, .. } => attrs
@@ -36,53 +83,30 @@ const VOID: &[&str] = &[
     "wbr",
 ];
 
+/// Elements that start a new line, and end one.
+const BLOCKS: &[&str] = &[
+    "p",
+    "div",
+    "ul",
+    "ol",
+    "tr",
+    "table",
+    "blockquote",
+    "section",
+    "article",
+    "header",
+    "footer",
+    "figure",
+    "dl",
+    "dt",
+    "dd",
+];
+
+/// Headings, by level.
+const HEADINGS: [&str; 6] = ["h1", "h2", "h3", "h4", "h5", "h6"];
+
 /// Elements whose content is never shown as text.
 const SKIPPED: &[&str] = &["script", "style", "svg", "template", "head"];
-
-/// Splits HTML into text and tags. Comments are dropped, along with the
-/// content of [`SKIPPED`] elements, though their opening tag is still
-/// returned so its attributes can be used.
-pub(crate) fn tokenize(html: &str) -> Vec<Token> {
-    let mut emitter = DefaultEmitter::default();
-    // Read the insides of elements like `<script>` as text, like a browser.
-    emitter.naively_switch_states(true);
-    let mut tokens: Vec<Token> = Vec::new();
-    let mut skipping: Option<String> = None;
-    for token in Tokenizer::new_with_emitter(html, emitter).flatten() {
-        match token {
-            Html::StartTag(tag) if skipping.is_none() => {
-                let name = string(&tag.name);
-                if SKIPPED.contains(&name.as_str()) && !tag.self_closing {
-                    skipping = Some(name.clone());
-                }
-                let attrs = tag
-                    .attributes
-                    .iter()
-                    .map(|(k, v)| (string(k), string(v)))
-                    .collect();
-                tokens.push(Token::Open { name, attrs });
-            }
-            Html::EndTag(tag) => {
-                let name = string(&tag.name);
-                if skipping.is_none() {
-                    tokens.push(Token::Close(name));
-                } else if skipping.as_ref() == Some(&name) {
-                    skipping = None;
-                }
-            }
-            Html::String(text) if skipping.is_none() => {
-                // The tokenizer can hand text over in pieces.
-                if let Some(Token::Text(last)) = tokens.last_mut() {
-                    last.push_str(&string(&text));
-                } else {
-                    tokens.push(Token::Text(string(&text)));
-                }
-            }
-            _ => {}
-        }
-    }
-    tokens
-}
 
 fn string(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
@@ -118,7 +142,7 @@ impl Renderer<'_> {
 
     /// Reads the text and links out of a chunk of HTML.
     pub(super) fn html_tokens(&mut self, html: &str) {
-        for token in tokenize(html) {
+        for token in Token::parse(html) {
             // Inside a `<pre>`, only its text and its end matter.
             if let Some(Capture::Pre(pre)) = &mut self.capture {
                 match &token {
@@ -190,14 +214,13 @@ impl Renderer<'_> {
                 let prefix = Prefix::hanging(bullet, self.theme.text);
                 self.open_prefixed(Kind::HtmlItem, prefix, Style::new());
             }
-            "p" | "div" | "ul" | "ol" | "tr" | "table" | "blockquote" | "section" | "article"
-            | "header" | "footer" | "figure" | "dl" | "dt" | "dd" => self.writer.hard_break(),
+            _ if BLOCKS.contains(&name) => self.writer.hard_break(),
             "hr" => {
                 self.writer.hard_break();
                 self.text("───");
                 self.writer.line_break();
             }
-            "h1" | "h2" | "h3" | "h4" | "h5" | "h6" => {
+            _ if HEADINGS.contains(&name) => {
                 // A blank line before a heading, as in Markdown.
                 self.writer.hard_break();
                 if self.writer.inline().is_empty() {
@@ -205,19 +228,10 @@ impl Renderer<'_> {
                 } else {
                     self.writer.line_break();
                 }
-                let level = usize::from(name.as_bytes()[1] - b'1');
+                let level = HEADINGS.iter().position(|h| *h == name).unwrap_or(0);
                 self.heading_marker(level);
                 self.open(Kind::Html(name.to_owned()), self.theme.headings[level]);
             }
-            "strong" | "b" => self.open(Kind::Html(name.to_owned()), self.theme.strong),
-            "em" | "i" | "cite" => self.open(Kind::Html(name.to_owned()), self.theme.emphasis),
-            "code" | "kbd" | "tt" | "samp" => {
-                self.open(Kind::Html(name.to_owned()), self.theme.code)
-            }
-            "s" | "del" | "strike" => {
-                self.open(Kind::Html(name.to_owned()), self.theme.strikethrough)
-            }
-            "small" | "sub" | "sup" => self.open(Kind::Html(name.to_owned()), self.theme.small),
             "img" => {
                 let src = token.attr("src").unwrap_or("");
                 let alt = token.attr("alt").unwrap_or("");
@@ -229,8 +243,24 @@ impl Renderer<'_> {
                     self.piece(format!("[figure: {label}]"), style);
                 }
             }
-            _ => {}
+            _ => {
+                if let Some(style) = self.tag_style(name) {
+                    self.open(Kind::Html(name.to_owned()), style);
+                }
+            }
         }
+    }
+
+    /// The style of text in an element that formats it, like `<strong>`.
+    fn tag_style(&self, name: &str) -> Option<Style> {
+        Some(match name {
+            "strong" | "b" => self.theme.strong,
+            "em" | "i" | "cite" => self.theme.emphasis,
+            "code" | "kbd" | "tt" | "samp" => self.theme.code,
+            "s" | "del" | "strike" => self.theme.strikethrough,
+            "small" | "sub" | "sup" => self.theme.small,
+            _ => return None,
+        })
     }
 
     fn close_tag(&mut self, name: &str) {
@@ -239,10 +269,7 @@ impl Renderer<'_> {
                 self.writer.flush();
                 self.close(&Kind::HtmlItem);
             }
-            "p" | "div" | "li" | "ul" | "ol" | "tr" | "table" | "blockquote" | "section"
-            | "article" | "header" | "footer" | "figure" | "dl" | "dt" | "dd" => {
-                self.writer.hard_break()
-            }
+            _ if name == "li" || BLOCKS.contains(&name) => self.writer.hard_break(),
             "td" | "th" => self.text(" "),
             _ => {
                 // Only when it's the innermost, as HTML is often
@@ -251,7 +278,7 @@ impl Renderer<'_> {
                 {
                     self.open.pop();
                 }
-                if name.len() == 2 && name.starts_with('h') {
+                if HEADINGS.contains(&name) {
                     self.writer.hard_break();
                 }
             }
@@ -272,7 +299,7 @@ mod tests {
 
     #[test]
     fn links_and_text() {
-        let tokens = tokenize(r#"<li><a href="/x?a=1&amp;b=2">Hi &amp; bye</a></li>"#);
+        let tokens = Token::parse(r#"<li><a href="/x?a=1&amp;b=2">Hi &amp; bye</a></li>"#);
         assert_eq!(tokens[1].attr("href"), Some("/x?a=1&b=2"));
         assert_eq!(tokens[2], Token::Text("Hi & bye".into()));
         assert_eq!(tokens[3], Token::Close("a".into()));
@@ -280,7 +307,7 @@ mod tests {
 
     #[test]
     fn skips_svg_content_and_comments() {
-        let tokens = tokenize(r#"a<!-- no --><svg aria-label="fig"><text>x</text></svg>b"#);
+        let tokens = Token::parse(r#"a<!-- no --><svg aria-label="fig"><text>x</text></svg>b"#);
         assert_eq!(tokens.len(), 3);
         assert_eq!(tokens[1].attr("aria-label"), Some("fig"));
         assert_eq!(tokens[2], Token::Text("b".into()));
@@ -289,7 +316,7 @@ mod tests {
     #[test]
     fn multibyte_text() {
         assert_eq!(
-            tokenize("λ<b>"),
+            Token::parse("λ<b>"),
             [
                 Token::Text("λ".into()),
                 Token::Open {
@@ -302,7 +329,7 @@ mod tests {
 
     #[test]
     fn stray_angle_brackets_are_text() {
-        let tokens = tokenize("1 < 2 > 0");
+        let tokens = Token::parse("1 < 2 > 0");
         let text: String = tokens
             .iter()
             .map(|t| match t {
