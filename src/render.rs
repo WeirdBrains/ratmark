@@ -1,6 +1,6 @@
 //! Walks pulldown-cmark's events and lays the document out in lines.
 
-use pulldown_cmark::{CodeBlockKind, CowStr, Event, Options, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, CowStr, Event, Tag, TagEnd};
 use ratatui_core::style::Style;
 
 use crate::table::Table;
@@ -13,15 +13,15 @@ mod html;
 
 const BULLETS: [&str; 3] = ["• ", "◦ ", "▪ "];
 
-/// What's read beyond CommonMark. Heading attributes are left off:
-/// pulldown-cmark panics reading some of them, and kramdown, the one
-/// dialect here with heading ids, has its own.
-const OPTIONS: Options = Options::ENABLE_TABLES
-    .union(Options::ENABLE_FOOTNOTES)
-    .union(Options::ENABLE_STRIKETHROUGH)
-    .union(Options::ENABLE_TASKLISTS)
-    .union(Options::ENABLE_MATH)
-    .union(Options::ENABLE_SMART_PUNCTUATION);
+/// What's read beyond CommonMark, without kramdown. Heading attributes are
+/// left off, as pulldown-cmark panics reading some of them.
+#[cfg(not(feature = "kramdown"))]
+const OPTIONS: pulldown_cmark::Options = pulldown_cmark::Options::ENABLE_TABLES
+    .union(pulldown_cmark::Options::ENABLE_FOOTNOTES)
+    .union(pulldown_cmark::Options::ENABLE_STRIKETHROUGH)
+    .union(pulldown_cmark::Options::ENABLE_TASKLISTS)
+    .union(pulldown_cmark::Options::ENABLE_MATH)
+    .union(pulldown_cmark::Options::ENABLE_SMART_PUNCTUATION);
 
 pub(crate) struct Renderer<'t> {
     theme: &'t Theme,
@@ -55,7 +55,9 @@ impl<'t> Renderer<'t> {
 
     pub fn run(mut self, markdown: &str) -> Rendered {
         #[cfg(feature = "kramdown")]
-        for (event, attributes) in pulldown_kram::Document::new(markdown, OPTIONS).events() {
+        for (event, attributes) in
+            pulldown_kram::Document::new(markdown, pulldown_kram::Extensions::all()).events()
+        {
             self.next(event, &attributes.classes);
         }
         #[cfg(not(feature = "kramdown"))]
