@@ -129,7 +129,6 @@ use std::ops::Range;
 
 use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span, Text};
-use unicode_width::UnicodeWidthChar;
 
 mod render;
 mod table;
@@ -142,6 +141,8 @@ mod writer;
 pub mod front_matter;
 #[cfg(feature = "syntax")]
 mod syntax;
+
+use crate::wrap::Piece;
 
 pub use theme::Theme;
 pub use view::{MarkdownState, MarkdownView};
@@ -265,24 +266,15 @@ impl Overflow {
         }
         let mut x = 0;
         for span in &code.spans {
-            let mut text = String::new();
-            for c in span.content.chars() {
-                let w = c.width().unwrap_or(0);
-                let (from, to) = (x, x + w);
-                x = to;
-                if to <= start || from >= end {
-                    continue;
-                }
-                // A wide character cut by either edge shows as spaces.
-                if from < start || to > end {
-                    let shown = to.min(end) - from.max(start);
-                    text.push_str(&" ".repeat(shown));
-                } else {
-                    text.push(c);
-                }
+            let piece = Piece::new(span.content.as_ref(), span.style);
+            let from = x;
+            x += piece.width();
+            if x <= start || from >= end {
+                continue;
             }
-            if !text.is_empty() {
-                spans.push(Span::styled(text, self.style.patch(span.style)));
+            let shown = piece.cut(start.saturating_sub(from)..end - from);
+            if !shown.text.is_empty() {
+                spans.push(Span::styled(shown.text, self.style.patch(span.style)));
             }
         }
         let used = x.clamp(start, end) - start;

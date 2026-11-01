@@ -262,21 +262,11 @@ fn truncate(pieces: &mut Vec<Piece>, width: usize) {
     let mut used = 0;
     for i in 0..pieces.len() {
         let w = pieces[i].width();
-        if used + w <= width {
-            used += w;
-            continue;
+        if used + w > width {
+            pieces[i] = pieces[i].split_at_width(width - used).0;
+            pieces.truncate(i + 1);
+            return;
         }
-        let mut text = String::new();
-        for c in pieces[i].text.chars() {
-            let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
-            if used + cw > width {
-                break;
-            }
-            used += cw;
-            text.push(c);
-        }
-        pieces[i].text = text;
-        pieces.truncate(i + 1);
-        break;
+        used += w;
     }
 }
