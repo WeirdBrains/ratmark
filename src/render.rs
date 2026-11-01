@@ -1,8 +1,6 @@
 //! Walks pulldown-cmark's events and lays the document out in lines.
 
-use std::borrow::Cow;
-
-use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Tag, TagEnd};
+use pulldown_cmark::{CodeBlockKind, CowStr, Event, HeadingLevel, Options, Tag, TagEnd};
 use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span};
 
@@ -74,7 +72,7 @@ impl<'t> Renderer<'t> {
     /// Handles the next event, which kramdown's attribute lists may give
     /// `classes`.
     #[cfg_attr(not(feature = "kramdown"), allow(unused_variables))]
-    fn next(&mut self, event: Event<'_>, classes: &[Cow<'_, str>]) {
+    fn next(&mut self, event: Event<'_>, classes: &[CowStr<'_>]) {
         match (self.capture.take(), event) {
             (Some(capture), event) => self.captured(capture, event),
             #[cfg(feature = "kramdown")]
