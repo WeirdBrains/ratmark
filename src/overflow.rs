@@ -41,16 +41,16 @@ impl Overflow {
         widest.saturating_sub(usize::from(self.width))
     }
 
-    /// The columns the block is drawn across, padding included.
-    pub(crate) fn columns(&self) -> Range<u16> {
-        self.x..self.x + self.width + if self.padded { 2 } else { 0 }
-    }
-
     /// The block's `i`th line with its padding, shifted `shift` columns to
     /// the left, `‹` and `›` showing where code is out of sight.
     pub fn row(&self, i: usize, shift: usize) -> Line<'static> {
         let spans = self.pieces(i, shift);
         Line::from_iter(spans.into_iter().map(|p| Span::styled(p.text, p.style)))
+    }
+
+    /// The columns the block is drawn across, padding included.
+    pub(crate) fn columns(&self) -> Range<u16> {
+        self.x..self.x + self.width + if self.padded { 2 } else { 0 }
     }
 
     /// The pieces of [`Overflow::row`].

@@ -48,8 +48,8 @@
 //! through. Every style is a public field, so making your own is a struct
 //! literal.
 //!
-//! CommonMark plus tables, footnotes, strikethrough, task lists and math are
-//! supported. Code too wide for the page scrolls sideways rather than
+//! CommonMark plus tables, footnotes, strikethrough, task lists, definition
+//! lists and math are supported. Code too wide for the page scrolls sideways rather than
 //! wrapping.
 //!
 #![cfg_attr(

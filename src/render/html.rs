@@ -198,7 +198,7 @@ impl Renderer<'_> {
         match name {
             "a" => {
                 if let Some(href) = token.attr("href") {
-                    self.open_link(Kind::Html(name.to_owned()), href);
+                    self.open_link(Kind::html(name), href);
                 }
             }
             "br" => self.writer.line_break(),
@@ -230,7 +230,7 @@ impl Renderer<'_> {
                 }
                 let level = HEADINGS.iter().position(|h| *h == name).unwrap_or(0);
                 self.heading_marker(level);
-                self.open(Kind::Html(name.to_owned()), self.theme.headings[level]);
+                self.open(Kind::html(name), self.theme.headings[level]);
             }
             "img" => {
                 let src = token.attr("src").unwrap_or("");
@@ -245,7 +245,7 @@ impl Renderer<'_> {
             }
             _ => {
                 if let Some(style) = self.tag_style(name) {
-                    self.open(Kind::Html(name.to_owned()), style);
+                    self.open(Kind::html(name), style);
                 }
             }
         }
@@ -274,8 +274,7 @@ impl Renderer<'_> {
             _ => {
                 // Only when it's the innermost, as HTML is often
                 // left unclosed.
-                if matches!(self.open.last(), Some(o) if o.kind.is_like(&Kind::Html(name.to_owned())))
-                {
+                if matches!(self.open.last(), Some(o) if o.kind.is_like(&Kind::html(name))) {
                     self.open.pop();
                 }
                 if HEADINGS.contains(&name) {

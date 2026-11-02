@@ -29,8 +29,8 @@ knows about, like OSC 8. It needs Ratatui's cell extensions, which aren't
 released yet ([ratatui#2854]), and `MarkdownState::with_link_base` makes
 the links absolute.
 
-It handles CommonMark plus tables, footnotes, strikethrough, task lists and
-math. Code blocks can be syntax highlighted with [syntect], through the
+It handles CommonMark plus tables, footnotes, strikethrough, task lists,
+definition lists and math. Code blocks can be syntax highlighted with [syntect], through the
 `syntax` feature, which is off by default. It uses syntect's pure Rust regex
 engine, so ratmark also builds for `wasm32-unknown-unknown` and works in the
 browser with something like [Ratzilla].

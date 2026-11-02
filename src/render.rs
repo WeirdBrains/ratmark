@@ -20,6 +20,7 @@ const OPTIONS: pulldown_cmark::Options = pulldown_cmark::Options::ENABLE_TABLES
     .union(pulldown_cmark::Options::ENABLE_FOOTNOTES)
     .union(pulldown_cmark::Options::ENABLE_STRIKETHROUGH)
     .union(pulldown_cmark::Options::ENABLE_TASKLISTS)
+    .union(pulldown_cmark::Options::ENABLE_DEFINITION_LIST)
     .union(pulldown_cmark::Options::ENABLE_MATH)
     .union(pulldown_cmark::Options::ENABLE_SMART_PUNCTUATION);
 
@@ -247,7 +248,8 @@ impl<'t> Renderer<'t> {
                     alt: String::new(),
                 })
             }
-            // Never parsed, as `options` leaves metadata blocks off.
+            // Never parsed, as neither pulldown-kram's extensions nor
+            // `OPTIONS` read metadata blocks.
             Tag::MetadataBlock(_) => {}
         }
     }
@@ -332,7 +334,10 @@ impl<'t> Renderer<'t> {
         let base = self.code_block_style();
         let plain = || code.lines().map(|l| vec![Piece::new(l, base)]).collect();
         #[cfg(feature = "syntax")]
-        let code = crate::syntax::highlight(&code, lang, self.theme, base).unwrap_or_else(plain);
+        let code = self
+            .theme
+            .highlight(&code, lang, base)
+            .unwrap_or_else(plain);
         #[cfg(not(feature = "syntax"))]
         let code: Vec<Vec<Piece>> = plain();
         self.writer.pay_gap();
@@ -524,6 +529,12 @@ enum Kind {
 }
 
 impl Kind {
+    /// An HTML element named `name`.
+    #[cfg(feature = "html")]
+    fn html(name: &str) -> Self {
+        Kind::Html(name.to_owned())
+    }
+
     /// Whether this is the same kind of element as `other`: any list, or
     /// HTML of the same tag name.
     fn is_like(&self, other: &Kind) -> bool {
@@ -533,21 +544,6 @@ impl Kind {
             #[cfg(feature = "html")]
             (Kind::Class { name: a, .. }, Kind::Class { name: b, .. }) => a == b,
             _ => std::mem::discriminant(self) == std::mem::discriminant(other),
-        }
-    }
-}
-
-impl Capture {
-    /// Whether `end` ends this content. A `<pre>` ends at its closing tag
-    /// instead, read from the HTML.
-    fn ends_at(&self, end: &TagEnd) -> bool {
-        match self {
-            Capture::Code { .. } => *end == TagEnd::CodeBlock,
-            Capture::Image { .. } => *end == TagEnd::Image,
-            #[cfg(feature = "html")]
-            Capture::HtmlBlock(_) => *end == TagEnd::HtmlBlock,
-            #[cfg(feature = "html")]
-            Capture::Pre(_) => false,
         }
     }
 }
@@ -567,4 +563,19 @@ enum Capture {
     /// The text of an HTML `<pre>`, kept as is until it closes.
     #[cfg(feature = "html")]
     Pre(String),
+}
+
+impl Capture {
+    /// Whether `end` ends this content. A `<pre>` ends at its closing tag
+    /// instead, read from the HTML.
+    fn ends_at(&self, end: &TagEnd) -> bool {
+        match self {
+            Capture::Code { .. } => *end == TagEnd::CodeBlock,
+            Capture::Image { .. } => *end == TagEnd::Image,
+            #[cfg(feature = "html")]
+            Capture::HtmlBlock(_) => *end == TagEnd::HtmlBlock,
+            #[cfg(feature = "html")]
+            Capture::Pre(_) => false,
+        }
+    }
 }

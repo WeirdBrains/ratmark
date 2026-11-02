@@ -4,7 +4,7 @@
 use ratatui_core::style::Style;
 use ratatui_core::text::{Line, Span};
 
-use crate::wrap::{Inline, Piece, wrap};
+use crate::wrap::{Inline, Piece};
 use crate::{Link, Region};
 
 pub(crate) struct Writer {
@@ -82,7 +82,7 @@ impl Writer {
         // Every prefix is as wide on its first line as on the rest, so one
         // width holds for the whole block.
         let inline = std::mem::take(&mut self.inline);
-        for line in wrap(&inline, self.available()) {
+        for line in Inline::wrap(&inline, self.available()) {
             self.emit(line);
         }
     }

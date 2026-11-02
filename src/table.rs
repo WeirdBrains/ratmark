@@ -4,7 +4,7 @@ use pulldown_cmark::Alignment;
 use unicode_width::UnicodeWidthStr;
 
 use crate::Theme;
-use crate::wrap::{Inline, Piece, wrap};
+use crate::wrap::{Inline, Piece};
 
 /// Columns are never narrowed past this to make a table fit.
 const MIN_WIDTH: usize = 3;
@@ -90,7 +90,11 @@ impl Table {
         let cells: Vec<Vec<Vec<Piece>>> = widths
             .iter()
             .enumerate()
-            .map(|(i, &width)| row.get(i).map(|cell| wrap(cell, width)).unwrap_or_default())
+            .map(|(i, &width)| {
+                row.get(i)
+                    .map(|cell| Inline::wrap(cell, width))
+                    .unwrap_or_default()
+            })
             .collect();
         let height = cells.iter().map(Vec::len).max().unwrap_or(0).max(1);
         (0..height)
@@ -120,7 +124,7 @@ impl Table {
 
 /// How wide a cell is on one line.
 fn natural_width(cell: &[Inline]) -> usize {
-    wrap(cell, usize::MAX / 2)
+    Inline::wrap(cell, usize::MAX / 2)
         .iter()
         .map(|l| l.iter().map(Piece::width).sum::<usize>())
         .max()

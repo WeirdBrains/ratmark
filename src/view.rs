@@ -52,78 +52,11 @@ impl StatefulWidget for MarkdownView<'_> {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut MarkdownState) {
         state.lay_out(area, self.theme);
-        let Some((_, rendered)) = &state.rendered else {
-            return;
-        };
-        self.draw_lines(rendered, state, area, buf);
-        self.draw_shifted_code(state, area, buf);
+        state.draw_lines(buf);
+        state.draw_shifted_code(buf);
         #[cfg(feature = "links")]
-        self.draw_links(rendered, state, area, buf);
-        if let Some(link) = state.focused() {
-            for rect in link
-                .regions
-                .iter()
-                .filter_map(|r| r.on_screen(state.scroll, area))
-            {
-                buf.set_style(rect, self.focus);
-            }
-        }
-    }
-}
-
-impl MarkdownView<'_> {
-    /// Draws the lines on screen, as laid out.
-    fn draw_lines(&self, rendered: &Rendered, state: &MarkdownState, area: Rect, buf: &mut Buffer) {
-        let lines = rendered
-            .lines
-            .iter()
-            .skip(state.scroll)
-            .take(usize::from(area.height));
-        for (y, line) in (area.y..).zip(lines) {
-            buf.set_line(area.x, y, line, area.width);
-        }
-    }
-
-    /// Draws the wide code blocks shifted sideways over their lines.
-    fn draw_shifted_code(&self, state: &MarkdownState, area: Rect, buf: &mut Buffer) {
-        for overflow in state.visible_overflows() {
-            let shift = state.shift(overflow.block);
-            if shift == 0 {
-                continue;
-            }
-            let x = area.x + overflow.x;
-            let width = area.right().saturating_sub(x);
-            for line in overflow.lines.clone() {
-                let Some(row) = line
-                    .checked_sub(state.scroll)
-                    .filter(|r| *r < usize::from(area.height))
-                else {
-                    continue;
-                };
-                let shifted = overflow.row(line - overflow.lines.start, shift);
-                buf.set_line(x, area.y + row as u16, &shifted, width);
-            }
-        }
-    }
-
-    /// Marks the cells of each link with where it goes, for backends that
-    /// draw real links.
-    #[cfg(feature = "links")]
-    fn draw_links(&self, rendered: &Rendered, state: &MarkdownState, area: Rect, buf: &mut Buffer) {
-        for (i, link) in rendered.links.iter().enumerate() {
-            // One id per link, so a terminal treats the pieces of a wrapped
-            // link as one.
-            let url = state.absolute(&link.url);
-            let hyperlink =
-                ratatui_core::buffer::Hyperlink::new(&url).with_id(format!("ratmark-{i}"));
-            for rect in link
-                .regions
-                .iter()
-                .filter_map(|r| r.on_screen(state.scroll, area))
-            {
-                buf.set_hyperlink(rect, Some(&hyperlink));
-            }
-        }
+        state.draw_links(buf);
+        state.draw_focus(buf, self.focus);
     }
 }
 
@@ -282,6 +215,82 @@ impl MarkdownState {
         }
         self.apply_anchor();
         self.clamp();
+    }
+
+    /// Draws the lines on screen, as laid out.
+    fn draw_lines(&self, buf: &mut Buffer) {
+        let Some(rendered) = self.rendered() else {
+            return;
+        };
+        let area = self.area;
+        let lines = rendered
+            .lines
+            .iter()
+            .skip(self.scroll)
+            .take(usize::from(area.height));
+        for (y, line) in (area.y..).zip(lines) {
+            buf.set_line(area.x, y, line, area.width);
+        }
+    }
+
+    /// Draws the wide code blocks shifted sideways over their lines.
+    fn draw_shifted_code(&self, buf: &mut Buffer) {
+        let area = self.area;
+        for overflow in self.visible_overflows() {
+            let shift = self.shift(overflow.block);
+            if shift == 0 {
+                continue;
+            }
+            let x = area.x + overflow.x;
+            let width = area.right().saturating_sub(x);
+            for line in overflow.lines.clone() {
+                let Some(row) = line
+                    .checked_sub(self.scroll)
+                    .filter(|r| *r < usize::from(area.height))
+                else {
+                    continue;
+                };
+                let shifted = overflow.row(line - overflow.lines.start, shift);
+                buf.set_line(x, area.y + row as u16, &shifted, width);
+            }
+        }
+    }
+
+    /// Marks the cells of each link with where it goes, for backends that
+    /// draw real links.
+    #[cfg(feature = "links")]
+    fn draw_links(&self, buf: &mut Buffer) {
+        let Some(rendered) = self.rendered() else {
+            return;
+        };
+        for (i, link) in rendered.links.iter().enumerate() {
+            // One id per link, so a terminal treats the pieces of a wrapped
+            // link as one.
+            let url = self.absolute(&link.url);
+            let hyperlink =
+                ratatui_core::buffer::Hyperlink::new(&url).with_id(format!("ratmark-{i}"));
+            for rect in link
+                .regions
+                .iter()
+                .filter_map(|r| r.on_screen(self.scroll, self.area))
+            {
+                buf.set_hyperlink(rect, Some(&hyperlink));
+            }
+        }
+    }
+
+    /// Patches `style` over the focused link.
+    fn draw_focus(&self, buf: &mut Buffer, style: Style) {
+        let Some(link) = self.focused() else {
+            return;
+        };
+        for rect in link
+            .regions
+            .iter()
+            .filter_map(|r| r.on_screen(self.scroll, self.area))
+        {
+            buf.set_style(rect, style);
+        }
     }
 
     /// The document's line and column at screen position `x`, `y`, if it's

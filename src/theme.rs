@@ -1,3 +1,5 @@
+//! The styles a document is drawn with.
+
 use ratatui_core::style::{Color, Modifier, Style};
 
 /// The styles used for each kind of Markdown element.
@@ -70,24 +72,6 @@ impl Default for Theme {
 }
 
 impl Theme {
-    /// The style for an element with `classes`, from [`Theme::classes`],
-    /// or `None` when no selector matches.
-    #[cfg(any(feature = "html", feature = "kramdown"))]
-    pub(crate) fn class_style<'c>(
-        &self,
-        classes: impl IntoIterator<Item = &'c str> + Clone,
-    ) -> Option<Style> {
-        let has = |class: &str| classes.clone().into_iter().any(|c| c == class);
-        self.classes
-            .iter()
-            .filter(|(selector, _)| {
-                let mut wanted = selector.split('.').filter(|c| !c.is_empty()).peekable();
-                wanted.peek().is_some() && wanted.all(has)
-            })
-            .map(|(_, style)| *style)
-            .reduce(|style, more| style.patch(more))
-    }
-
     /// Gruvbox dark, after the look of Tyler Bloom's blog, The Avid
     /// Rustacean, which this crate's design comes from.
     pub fn gruvbox() -> Self {
@@ -176,5 +160,23 @@ impl Theme {
             syntax: None,
             classes: Vec::new(),
         }
+    }
+
+    /// The style for an element with `classes`, from [`Theme::classes`],
+    /// or `None` when no selector matches.
+    #[cfg(any(feature = "html", feature = "kramdown"))]
+    pub(crate) fn class_style<'c>(
+        &self,
+        classes: impl IntoIterator<Item = &'c str> + Clone,
+    ) -> Option<Style> {
+        let has = |class: &str| classes.clone().into_iter().any(|c| c == class);
+        self.classes
+            .iter()
+            .filter(|(selector, _)| {
+                let mut wanted = selector.split('.').filter(|c| !c.is_empty()).peekable();
+                wanted.peek().is_some() && wanted.all(has)
+            })
+            .map(|(_, style)| *style)
+            .reduce(|style, more| style.patch(more))
     }
 }
