@@ -60,7 +60,33 @@ impl StatefulWidget for MarkdownView<'_> {
     }
 }
 
-/// A document and where it's scrolled to, for [`MarkdownView`].
+/// A document and where it's scrolled to, for [`MarkdownView`]. Scrolling
+/// stays inside the document as last drawn.
+///
+/// ```
+/// use ratmark::{MarkdownState, MarkdownView, Theme};
+/// # use ratatui_core::{buffer::Buffer, layout::Rect, widgets::StatefulWidget};
+///
+/// let markdown = "# Intro\n\na\n\nb\n\n## The End\n\n```\nlet wide = 1;\n```\n";
+/// let mut state = MarkdownState::new(markdown);
+/// # let area = Rect::new(0, 0, 10, 3);
+/// # let mut buf = Buffer::empty(area);
+/// MarkdownView::new(&Theme::default()).render(area, &mut buf, &mut state);
+///
+/// // Scrolling says whether it moved, which it doesn't at either end.
+/// assert!(state.scroll_by(1));
+/// assert!(state.scroll_by(-1));
+/// assert!(!state.scroll_by(-1));
+///
+/// // A `#section` link scrolls to the heading it loosely names.
+/// state.scroll_to_anchor("the-end");
+/// assert_eq!(state.scroll(), 6);
+///
+/// // Code too wide for the page shifts sideways, the topmost block on
+/// // screen here, or the one under the pointer with `shift_at`.
+/// assert!(state.shift_by(2));
+/// assert_eq!(state.shift(0), 2);
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct MarkdownState {
     markdown: String,

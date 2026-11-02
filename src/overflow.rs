@@ -10,6 +10,19 @@ use crate::wrap::Piece;
 /// A code block too wide for the page. Its lines are cut off at the page's
 /// edge, with a `›` where there's more, and can be drawn shifted sideways to
 /// show the rest.
+///
+/// ```
+/// use ratmark::{Rendered, Theme};
+///
+/// let rendered = Rendered::render("```\nlet wide = 1;\n```\n", 10, &Theme::plain());
+/// let code = &rendered.overflows[0];
+/// assert_eq!(code.max_shift(), 5);
+///
+/// // Laid out cut off at the edge.
+/// assert_eq!(rendered.lines[code.lines.start].to_string(), " let wide›");
+/// // Drawn shifted to its end, over the same columns.
+/// assert_eq!(code.row(0, 5).to_string(), "‹ide = 1; ");
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Overflow {
     /// Which of the document's code blocks this is, counting from 0, the
