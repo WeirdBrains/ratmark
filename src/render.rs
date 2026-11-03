@@ -13,8 +13,9 @@ mod html;
 
 const BULLETS: [&str; 3] = ["• ", "◦ ", "▪ "];
 
-/// What's read beyond CommonMark, without kramdown. Heading attributes are
-/// left off, as pulldown-cmark panics reading some of them.
+/// The syntax read beyond CommonMark when the `kramdown` feature is off.
+/// Heading attributes are left off, since pulldown-cmark panics on some of
+/// them.
 #[cfg(not(feature = "kramdown"))]
 const OPTIONS: pulldown_cmark::Options = pulldown_cmark::Options::ENABLE_TABLES
     .union(pulldown_cmark::Options::ENABLE_FOOTNOTES)
@@ -74,8 +75,8 @@ impl<'t> Renderer<'t> {
         }
     }
 
-    /// Handles the next event, which kramdown's attribute lists may give
-    /// `classes`.
+    /// Handles the next event, with any `classes` kramdown's attribute lists
+    /// gave it.
     fn next(&mut self, event: Event<'_>, classes: &[CowStr<'_>]) {
         if self.capture.is_some() {
             self.captured(&event);
@@ -248,8 +249,8 @@ impl<'t> Renderer<'t> {
                     alt: String::new(),
                 })
             }
-            // Never parsed, as neither pulldown-kram's extensions nor
-            // `OPTIONS` read metadata blocks.
+            // Never parsed, since neither pulldown-kram's extensions nor
+            // `OPTIONS` turn on metadata blocks.
             Tag::MetadataBlock(_) => {}
         }
     }

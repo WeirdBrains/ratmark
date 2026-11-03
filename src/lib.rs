@@ -49,8 +49,8 @@
 //! literal.
 //!
 //! CommonMark plus tables, footnotes, strikethrough, task lists, definition
-//! lists and math are supported. Code too wide for the page scrolls sideways rather than
-//! wrapping.
+//! lists and math are supported. Code too wide for the page scrolls
+//! sideways rather than wrapping.
 //!
 #![cfg_attr(
     any(

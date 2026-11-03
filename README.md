@@ -30,10 +30,11 @@ released yet ([ratatui#2854]), and `MarkdownState::with_link_base` makes
 the links absolute.
 
 It handles CommonMark plus tables, footnotes, strikethrough, task lists,
-definition lists and math. Code blocks can be syntax highlighted with [syntect], through the
-`syntax` feature, which is off by default. It uses syntect's pure Rust regex
-engine, so ratmark also builds for `wasm32-unknown-unknown` and works in the
-browser with something like [Ratzilla].
+definition lists and math. Code blocks can be syntax highlighted with
+[syntect], through the `syntax` feature, which is off by default. It uses
+syntect's pure Rust regex engine, so ratmark also builds for
+`wasm32-unknown-unknown` and works in the browser with something like
+[Ratzilla].
 
 Markdown written for real sites tends to have HTML mixed in. With the `html`
 feature, off by default, ratmark reads the text, links and simple formatting

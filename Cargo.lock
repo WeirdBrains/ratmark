@@ -683,7 +683,7 @@ dependencies = [
 [[package]]
 name = "pulldown-kram"
 version = "0.1.0"
-source = "git+https://github.com/nixpulvis/pulldown-kram#7e7df0452fb8a93d492e15e27b4fbf8eb62fe1b3"
+source = "git+https://github.com/nixpulvis/pulldown-kram#102d143933f50599fc5888ddfaf515b196cef6bc"
 dependencies = [
  "bitflags",
  "pulldown-cmark",

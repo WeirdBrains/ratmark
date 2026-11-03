@@ -13,8 +13,9 @@ use crate::wrap::Piece;
 
 impl Theme {
     /// Colors `code` as the language named `lang`, one entry per line,
-    /// with the syntax theme over `base`. Returns `None` when there's no
-    /// syntax theme or the language or syntax theme is unknown.
+    /// with the syntax theme over `base`. Returns `None` when the theme has
+    /// no syntax theme, or when the language or the syntax theme isn't
+    /// known.
     pub(crate) fn highlight(&self, code: &str, lang: &str, base: Style) -> Option<Vec<Vec<Piece>>> {
         let syntax = syntaxes().find_syntax_by_token(lang)?;
         let colors = themes().themes.get(self.syntax?)?;
