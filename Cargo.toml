@@ -44,6 +44,7 @@ pulldown-cmark = { version = "0.13", default-features = false }
 pulldown-kram = { git = "https://github.com/nixpulvis/pulldown-kram", optional = true }
 # Ratatui's cell extensions, proposed in ratatui/ratatui#2854.
 ratatui-core = { git = "https://github.com/WeirdBrains/ratatui", branch = "multi-char-cells" }
+unicode-segmentation = "1.12"
 unicode-width = "0.2"
 syntect = { version = "5.3", optional = true, default-features = false, features = ["default-syntaxes", "default-themes", "regex-fancy"] }
 html5gum = { version = "0.9", optional = true }

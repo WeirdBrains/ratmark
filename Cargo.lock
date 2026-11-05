@@ -740,6 +740,7 @@ dependencies = [
  "serde-saphyr",
  "syntect",
  "toml",
+ "unicode-segmentation",
  "unicode-width",
  "url",
 ]

@@ -3,7 +3,8 @@
 use std::ops::Range;
 
 use ratatui_core::style::Style;
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 /// Inline content waiting to be laid out.
 #[derive(Debug, Clone, PartialEq)]
@@ -57,7 +58,7 @@ impl Inline {
                                 }
                                 // A character wider than a whole line gets a
                                 // line of its own.
-                                let len = piece.text.chars().next().map_or(0, char::len_utf8);
+                                let len = piece.text.graphemes(true).next().map_or(0, str::len);
                                 (head, rest) = (
                                     piece.with_text(&piece.text[..len]),
                                     piece.with_text(&piece.text[len..]),
@@ -113,6 +114,8 @@ impl Piece {
     }
 
     /// Splits the piece after as many whole characters as fit in `columns`.
+    /// A character is a grapheme cluster, so an emoji sequence, a flag or a
+    /// letter with combining marks is never split.
     pub fn split_at_width(&self, columns: usize) -> (Self, Self) {
         let (head, rest) = self.text.split_at(fitting(&self.text, columns));
         (self.with_text(head), self.with_text(rest))
@@ -126,13 +129,13 @@ impl Piece {
         let mut rest = rest;
         let mut text = String::new();
         if at < columns.start
-            && let Some(c) = rest.chars().next()
+            && let Some(c) = rest.graphemes(true).next()
         {
-            let to = at + c.width().unwrap_or(0);
+            let to = at + c.width();
             let shown = to.min(columns.end).saturating_sub(columns.start);
             text.push_str(&" ".repeat(shown));
             at = to;
-            rest = &rest[c.len_utf8()..];
+            rest = &rest[c.len()..];
         }
         let (inside, after) = rest.split_at(fitting(rest, columns.end.saturating_sub(at)));
         text.push_str(inside);
@@ -200,11 +203,13 @@ impl Token {
     }
 }
 
-/// How many bytes of `text` fit in `columns`, in whole characters.
+/// How many bytes of `text` fit in `columns`, in whole characters. Each
+/// grapheme cluster is measured as a whole, the way [`Piece::width`] and
+/// Ratatui's buffer measure it, so a cut never lands inside one.
 fn fitting(text: &str, columns: usize) -> usize {
     let mut used = 0;
-    for (i, c) in text.char_indices() {
-        used += c.width().unwrap_or(0);
+    for (i, g) in text.grapheme_indices(true) {
+        used += g.width();
         if used > columns {
             return i;
         }
@@ -274,6 +279,37 @@ mod tests {
         // Wide characters cut by an edge show as spaces.
         assert_eq!(piece.cut(2..4).text, "  ");
         assert_eq!(piece.cut(2..6).text, " 本b");
+        assert_eq!(piece.cut(0..2).text, "a ");
+    }
+
+    #[test]
+    fn splits_between_grapheme_clusters() {
+        // A family (joined with ZWJ), a flag, an emoji with VS16 and an e
+        // with a combining acute accent: each one is a single character.
+        let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        let flag = "\u{1f1ef}\u{1f1f5}";
+        let heart = "\u{2764}\u{fe0f}";
+        let e = "e\u{301}";
+        let word = format!("{family}{flag}{heart}{e}{e}");
+        let lines = Inline::wrap(&plain(&word), 2);
+        assert_eq!(text(&lines), [family, flag, heart, &format!("{e}{e}")]);
+        for line in &lines {
+            assert!(line.iter().map(Piece::width).sum::<usize>() <= 2);
+        }
+        // Wider than the line, a cluster still stays whole on a line of its own.
+        let lines = Inline::wrap(&plain(&format!("a{family}b")), 1);
+        assert_eq!(text(&lines), ["a", family, "b"]);
+    }
+
+    #[test]
+    fn cuts_between_grapheme_clusters() {
+        let family = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}";
+        let piece = Piece::new(format!("a{family}b"), Style::new());
+        assert_eq!(piece.split_at_width(2).0.text, "a");
+        assert_eq!(piece.split_at_width(3).0.text, format!("a{family}"));
+        assert_eq!(piece.cut(1..3).text, family);
+        // Cut by an edge, the cluster shows as spaces, like a wide character.
+        assert_eq!(piece.cut(2..4).text, " b");
         assert_eq!(piece.cut(0..2).text, "a ");
     }
 
